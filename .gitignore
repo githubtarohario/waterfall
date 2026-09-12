@@ -8,5 +8,4 @@ build_cmake/
 # 録画した連番 BMP
 capture/
 capture_*/
-# 会話ログのエクスポート
-*.txt
+# 会話ログのエクスポート (build/ 配下に出力される想定)
