@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPH 水しぶき API 仕様書</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --ground: #f2f4f6;
+    --surface: #ffffff;
+    --surface-2: #e8edf1;
+    --ink: #1a222b;
+    --ink-2: #4c5866;
+    --muted: #7b8794;
+    --line: #d5dce3;
+    --accent: #0f7f8a;
+    --accent-ink: #0a5f68;
+    --accent-soft: #d9eef0;
+    --code-bg: #e9eef2;
+    --code-ink: #203040;
+    --diagram-bg: #f7f9fb;
+    --warn-bg: #fff4e0;
+    --warn-line: #e3b360;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #131a21;
+      --surface: #1b232c;
+      --surface-2: #222c36;
+      --ink: #e3e9ef;
+      --ink-2: #b4bfca;
+      --muted: #8593a1;
+      --line: #313d49;
+      --accent: #4fc4cf;
+      --accent-ink: #7fd8e0;
+      --accent-soft: #163a40;
+      --code-bg: #232e39;
+      --code-ink: #d7e2ec;
+      --diagram-bg: #f7f9fb;
+      --warn-bg: #3a2f1a;
+      --warn-line: #a9843d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #131a21;
+    --surface: #1b232c;
+    --surface-2: #222c36;
+    --ink: #e3e9ef;
+    --ink-2: #b4bfca;
+    --muted: #8593a1;
+    --line: #313d49;
+    --accent: #4fc4cf;
+    --accent-ink: #7fd8e0;
+    --accent-soft: #163a40;
+    --code-bg: #232e39;
+    --code-ink: #d7e2ec;
+    --diagram-bg: #f7f9fb;
+    --warn-bg: #3a2f1a;
+    --warn-line: #a9843d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", Meiryo, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+    padding-inline: 20px;
+    padding-block: 0 64px;
+  }
+  a { color: var(--accent-ink); text-decoration: none; }
+  a:hover, a:focus-visible { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- 見出しバンド ---------- */
+  .masthead {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-block: 40px 28px;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px 32px;
+    align-items: end;
+  }
+  .masthead h1 {
+    font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+    font-weight: 900;
+    font-size: clamp(26px, 3.4vw, 38px);
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    margin: 0 0 8px;
+    text-wrap: balance;
+  }
+  .masthead .sub { color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .meta {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    display: grid;
+    gap: 2px;
+    text-align: right;
+  }
+  .meta b { color: var(--ink-2); font-weight: 600; }
+
+  /* ---------- 2 カラム ---------- */
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 48px;
+    padding-top: 32px;
+  }
+  nav.toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    font-size: 13px;
+  }
+  nav.toc .label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  nav.toc a {
+    color: var(--ink-2);
+    display: grid;
+    grid-template-columns: 2ch 1fr;
+    gap: 8px;
+  }
+  nav.toc a span:first-child { font-family: "JetBrains Mono", monospace; color: var(--muted); font-size: 12px; }
+  nav.toc a:hover span { color: var(--accent-ink); }
+
+  main { min-width: 0; }
+  section { margin-bottom: 56px; }
+  h2 {
+    font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 1.3;
+    margin: 0 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--accent);
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    text-wrap: balance;
+  }
+  h2 .num { font-family: "JetBrains Mono", monospace; font-size: 14px; color: var(--accent); font-weight: 600; }
+  h3 {
+    font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    margin: 28px 0 10px;
+  }
+  h3 code { font-size: 15px; }
+  p { margin: 0 0 12px; max-width: 72ch; }
+  p.lead { color: var(--ink-2); }
+
+  code, pre {
+    font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+  }
+  code {
+    font-size: 0.9em;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 0 0 16px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  /* ---------- 表 ---------- */
+  .tablewrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { padding: 8px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th {
+    background: var(--surface-2);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  td code { white-space: nowrap; }
+  td.wrap code { white-space: normal; }
+  .num-col { font-variant-numeric: tabular-nums; }
+
+  /* ---------- 図 ---------- */
+  figure { margin: 0 0 20px; }
+  figure .frame {
+    background: var(--diagram-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 16px;
+    overflow-x: auto;
+  }
+  figure pre.mermaid { background: none; padding: 0; margin: 0; color: #1a222b; }
+  figcaption {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+  }
+  figcaption .tag {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--accent-ink);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+
+  /* ---------- 注記 ---------- */
+  .note {
+    border-left: 3px solid var(--warn-line);
+    background: var(--warn-bg);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    margin: 0 0 16px;
+    max-width: 78ch;
+  }
+  .note b { font-weight: 600; }
+
+  /* ---------- キー ---------- */
+  kbd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 0 6px;
+    color: var(--ink);
+  }
+
+  @media (max-width: 860px) {
+    .page { grid-template-columns: 1fr; gap: 24px; }
+    nav.toc { position: static; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+    nav.toc ol { grid-template-columns: repeat(2, 1fr); }
+    .masthead { grid-template-columns: 1fr; }
+    .meta { text-align: left; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+</style>
+<style>
+  /* ---- 印刷 (PDF) 用 ---- */
+  @page { size: A4; margin: 16mm 14mm; }
+  @media print {
+    body { padding-inline: 0; font-size: 11.5px; background: #fff; }
+    .masthead { padding-block: 0 16px; }
+    .page { display: block; padding-top: 16px; }
+    nav.toc { position: static; margin-bottom: 24px; }
+    nav.toc ol { grid-template-columns: repeat(2, 1fr); }
+    section { break-inside: auto; }
+    h2 { break-after: avoid; }
+    h3 { break-after: avoid; }
+    .tablewrap, figure, pre, .note { break-inside: avoid; }
+    figure .frame { overflow: visible; }
+    /* 縦長の図は 1 ページに収まるよう縦横比を保って縮小する */
+    figure svg { width: auto !important; height: auto !important;
+                 max-width: 100% !important; max-height: 225mm !important; display: block; margin: 0 auto; }
+    a { color: inherit; }
+  }
+  html { scroll-behavior: auto; }
+</style>
+</head>
+<body>
+
+
+<header class="masthead">
+  <div>
+    <h1>SPH 水しぶきシミュレーション API 仕様書</h1>
+    <p class="sub">C++ モジュールの公開 API、HLSL エントリポイントとリソース束縛、およびそれらが呼ばれる順序のフローをまとめた技術リファレンス。数値の既定値は <code>src/SimConfig.h</code> を正とする。</p>
+  </div>
+  <div class="meta">
+    <div><b>対象</b> E:\work\水しぶき</div>
+    <div><b>環境</b> DirectX 11 / C++17 / HLSL 5.0</div>
+    <div><b>版</b> 1.0 — 2026-09-12</div>
+  </div>
+</header>
+
+<div class="page">
+<nav class="toc" aria-label="目次">
+  <div class="label">目次</div>
+  <ol>
+    <li><a href="#s1"><span>1</span><span>全体構成</span></a></li>
+    <li><a href="#s2"><span>2</span><span>コマンドラインとキー操作</span></a></li>
+    <li><a href="#s3"><span>3</span><span>D3DUtil — DirectX 11 ユーティリティ</span></a></li>
+    <li><a href="#s4"><span>4</span><span>SPHSimulator — GPU WCSPH</span></a></li>
+    <li><a href="#s5"><span>5</span><span>MarchingCubes — GPU MC</span></a></li>
+    <li><a href="#s6"><span>6</span><span>Renderer — 描画</span></a></li>
+    <li><a href="#s7"><span>7</span><span>HLSL リソース束縛一覧</span></a></li>
+    <li><a href="#s8"><span>8</span><span>初期化シーケンス</span></a></li>
+    <li><a href="#s9"><span>9</span><span>エラーと制約</span></a></li>
+    <li><a href="#s10"><span>10</span><span>主要パラメータの既定値</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============================================================ -->
+<section id="s1">
+  <h2><span class="num">1</span>全体構成</h2>
+
+  <h3>1.1 モジュール依存関係</h3>
+  <figure>
+    <div class="frame">
+<pre class="mermaid">
+graph TD
+    main["main.cpp&lt;br/&gt;ウィンドウ / メインループ / 入力 / 録画"]
+    cfg["SimConfig.h&lt;br/&gt;全パラメータ"]
+    d3d["D3DContext&lt;br/&gt;(D3DUtil.h)"]
+    sph["SPHSimulator"]
+    mc["MarchingCubes"]
+    tbl["mc::GenerateTriangleTable&lt;br/&gt;mc::SelfTest (MCTables.h)"]
+    ren["Renderer / OrbitCamera"]
+    sh_sph["sph.hlsl&lt;br/&gt;sph_common.hlsli"]
+    sh_mc["mc.hlsl"]
+    sh_ren["water.hlsl / scene.hlsl&lt;br/&gt;post.hlsl / render_common.hlsli"]
+
+    main --> cfg
+    main --> d3d
+    main --> sph
+    main --> mc
+    main --> ren
+    sph --> d3d
+    sph --> cfg
+    sph -. コンパイル .-> sh_sph
+    mc --> d3d
+    mc --> cfg
+    mc --> tbl
+    mc --> sph
+    mc -. コンパイル .-> sh_mc
+    sh_mc -. include .-> sh_sph
+    ren --> d3d
+    ren --> cfg
+    ren --> sph
+    ren --> mc
+    ren -. コンパイル .-> sh_ren
+</pre>
+    </div>
+    <figcaption><span class="tag">FIG 1</span>実線 = C++ の依存、点線 = 実行時にコンパイルするシェーダー</figcaption>
+  </figure>
+
+  <h3>1.2 1 描画フレームの流れ</h3>
+  <p>1 描画フレーム = 動画の 1/24 秒 (<code>cfg::FRAME_DT</code>)。物理時間は実時間に依存せず固定ステップで進む。</p>
+  <figure>
+    <div class="frame">
+<pre class="mermaid">
+flowchart TD
+    A[Win32 メッセージ処理] --> B{入力の反映}
+    B -->|R| B1[SPHSimulator::Reset]
+    B -->|P / W / G| B2[Renderer の表示フラグ切替]
+    B -->|右ドラッグ / ホイール| B3[OrbitCamera 更新]
+    B1 --> C
+    B2 --> C
+    B3 --> C
+    C{一時停止中?} -->|いいえ / S キー| D["SPHSimulator::StepFrame()&lt;br/&gt;= Step() × SubstepsPerFrame()"]
+    C -->|はい| E
+    D --> E["SPHSimulator::SortParticles()&lt;br/&gt;(MC 用に格子を最新化)"]
+    E --> F["MarchingCubes::Build(sim)"]
+    F --> G["Renderer::Render(sim, mc, time)"]
+    G --> H["IDXGISwapChain::Present"]
+    H --> I{--record ?}
+    I -->|はい| J["SaveBackBufferBMP()&lt;br/&gt;capture/frame_XXXX.bmp"]
+    I -->|いいえ| K
+    J --> K[タイトルバーに統計表示]
+    K --> L{--frames 到達?}
+    L -->|いいえ| A
+    L -->|はい| M[終了]
+</pre>
+    </div>
+    <figcaption><span class="tag">FIG 2</span>main.cpp のメインループ</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section id="s2">
+  <h2><span class="num">2</span>コマンドラインとキー操作</h2>
+  <h3>2.1 コマンドライン (main.cpp)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>オプション</th><th>引数</th><th>既定</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td><code>--spacing</code></td><td>粒子間隔 [m]</td><td><code>0.014</code></td><td>小さいほど粒子数が増え高精細 (粒子数 ∝ 1/spacing³)</td></tr>
+      <tr><td><code>--record</code></td><td>保存先ディレクトリ (省略可)</td><td><code>capture</code></td><td>各フレームを 24bit BMP で連番保存</td></tr>
+      <tr><td><code>--frames</code></td><td>フレーム数</td><td>無制限</td><td>指定フレーム描画後に自動終了</td></tr>
+      <tr><td><code>--particles</code></td><td>なし</td><td>–</td><td>粒子を点で表示するデバッグモードで開始</td></tr>
+      <tr><td><code>--resttest</code></td><td>なし</td><td>–</td><td>水塊 A を床に静置する安定性テストシーン</td></tr>
+      <tr><td><code>--debug</code></td><td>なし</td><td>–</td><td>D3D11 デバッグレイヤーを有効化</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>2.2 キー操作</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>キー</th><th>動作</th></tr></thead>
+    <tbody>
+      <tr><td><kbd>Space</kbd></td><td>一時停止 / 再開</td></tr>
+      <tr><td><kbd>S</kbd></td><td>1 フレーム進める</td></tr>
+      <tr><td><kbd>R</kbd></td><td>初期状態へリセット</td></tr>
+      <tr><td><kbd>P</kbd></td><td>粒子ポイント表示の切替</td></tr>
+      <tr><td><kbd>W</kbd></td><td>水面メッシュ表示の切替</td></tr>
+      <tr><td><kbd>G</kbd></td><td>ガラス水槽表示の切替</td></tr>
+      <tr><td>右ドラッグ</td><td>カメラ回転 (ヨー / ピッチ)</td></tr>
+      <tr><td>ホイール</td><td>ズーム</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>終了</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s3">
+  <h2><span class="num">3</span>D3DUtil.h — DirectX 11 ユーティリティ</h2>
+
+  <h3>3.1 <code>ThrowIfFailed(HRESULT hr, const char* what)</code></h3>
+  <p><code>FAILED(hr)</code> のとき <code>std::runtime_error("&lt;what&gt; failed (hr=0x....)")</code> を送出する。</p>
+
+  <h3>3.2 <code>struct GpuBuffer</code></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メンバ</th><th>型</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td><code>buffer</code></td><td><code>ComPtr&lt;ID3D11Buffer&gt;</code></td><td>バッファ本体</td></tr>
+      <tr><td><code>srv</code></td><td><code>ComPtr&lt;ID3D11ShaderResourceView&gt;</code></td><td>読み取り用ビュー (t#)</td></tr>
+      <tr><td><code>uav</code></td><td><code>ComPtr&lt;ID3D11UnorderedAccessView&gt;</code></td><td>読み書き用ビュー (u#)</td></tr>
+      <tr><td><code>count</code></td><td><code>UINT</code></td><td>要素数</td></tr>
+      <tr><td><code>stride</code></td><td><code>UINT</code></td><td>要素サイズ [byte]</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>3.3 <code>class D3DContext</code></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メソッド</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td class="wrap"><code>void Initialize(HWND hwnd, int width, int height, bool debugLayer)</code></td><td>デバイス・スワップチェーン (R8G8B8A8, 2 バッファ) 生成。シェーダーディレクトリを <code>&lt;exe&gt;/shaders/</code> → <code>&lt;exe&gt;/../shaders/</code> → <code>shaders/</code> の順に探索</td></tr>
+      <tr><td class="wrap"><code>Device()</code> / <code>Context()</code> / <code>SwapChain()</code></td><td>生オブジェクトへのアクセサ</td></tr>
+      <tr><td class="wrap"><code>BackBufferRTV()</code> / <code>BackBuffer()</code></td><td>バックバッファ RTV / テクスチャ</td></tr>
+      <tr><td class="wrap"><code>int Width()</code> / <code>int Height()</code></td><td>バックバッファ解像度</td></tr>
+      <tr><td class="wrap"><code>GpuBuffer CreateStructured(UINT stride, UINT count, const void* initData = nullptr, bool append = false)</code></td><td>構造化バッファ + SRV/UAV。<code>append=true</code> で Append カウンタ付き UAV</td></tr>
+      <tr><td class="wrap"><code>GpuBuffer CreateRaw(UINT byteSize, bool indirectArgs = false)</code></td><td>ByteAddressBuffer + RAW SRV/UAV。<code>indirectArgs=true</code> で <code>DrawInstancedIndirect</code> 引数用</td></tr>
+      <tr><td class="wrap"><code>ComPtr&lt;ID3D11Buffer&gt; CreateConstantBuffer(UINT byteSize)</code></td><td>動的定数バッファ (16 byte 境界に切り上げ)</td></tr>
+      <tr><td class="wrap"><code>ComPtr&lt;ID3D11Buffer&gt; CreateVertexBuffer(const void* data, UINT byteSize)</code></td><td>静的 (IMMUTABLE) 頂点バッファ</td></tr>
+      <tr><td class="wrap"><code>void UpdateConstantBuffer(ID3D11Buffer* cb, const void* data, UINT byteSize)</code></td><td><code>Map(WRITE_DISCARD)</code> で更新</td></tr>
+      <tr><td class="wrap"><code>ComPtr&lt;ID3DBlob&gt; CompileShader(const std::wstring&amp; file, const char* entry, const char* target)</code></td><td><code>D3DCompileFromFile</code>。失敗時はエラー文を stderr に出して例外</td></tr>
+      <tr><td class="wrap"><code>CreateCS / CreateVS / CreatePS(file, entry[, outBlob])</code></td><td><code>cs_5_0</code> / <code>vs_5_0</code> / <code>ps_5_0</code> でコンパイルして生成。<code>CreateVS</code> は入力レイアウト用に blob を返せる</td></tr>
+      <tr><td class="wrap"><code>void UnbindCompute()</code></td><td>CS の t0–t7 / u0–u7 を全て解除 (SRV/UAV 競合防止)</td></tr>
+      <tr><td class="wrap"><code>const std::wstring&amp; ShaderDir()</code></td><td>解決済みシェーダーディレクトリ</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s4">
+  <h2><span class="num">4</span>SPHSimulator — GPU WCSPH</h2>
+
+  <h3>4.1 <code>struct SimParams</code> (定数バッファ <code>b0</code>)</h3>
+  <p>HLSL の <code>cbuffer SimParams</code> (sph_common.hlsli) と完全一致させる。</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メンバ</th><th>型</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td><code>domainMin[3]</code>, <code>cellSize</code></td><td>float</td><td>領域最小 / 格子セル幅 (= h)</td></tr>
+      <tr><td><code>domainMax[3]</code>, <code>h</code></td><td>float</td><td>領域最大 / 平滑化長</td></tr>
+      <tr><td><code>gridDim[3]</code>, <code>numCells</code></td><td>uint</td><td>格子分割数 / 総セル数</td></tr>
+      <tr><td><code>h2</code>, <code>mass</code></td><td>float</td><td>h² / 粒子質量 (格子上で ρ0 になるよう自動決定)</td></tr>
+      <tr><td><code>restDensity</code>, <code>taitB</code></td><td>float</td><td>ρ0 / Tait 剛性 B = ρ0 c² / γ</td></tr>
+      <tr><td><code>viscosity</code>, <code>xsphEps</code></td><td>float</td><td>粘性 μ / XSPH 係数</td></tr>
+      <tr><td><code>dt</code>, <code>gravity</code></td><td>float</td><td>サブステップ時間 / 重力 (フルード相似で 1/SCENE_SCALE)</td></tr>
+      <tr><td><code>poly6</code>, <code>spikyGrad</code>, <code>viscLap</code></td><td>float</td><td>カーネル正規化定数</td></tr>
+      <tr><td><code>tankInner</code>, <code>tankOuter</code>, <code>tankHeight</code>, <code>tankFloorY</code>, <code>floorY</code></td><td>float</td><td>水槽と床の形状</td></tr>
+      <tr><td><code>restitution</code>, <code>friction</code></td><td>float</td><td>壁の反発係数 / 接触中の接線減衰</td></tr>
+      <tr><td><code>maxSpeed</code>, <code>boundaryDensityScale</code></td><td>float</td><td>速度上限 / 境界密度補正の強さ</td></tr>
+      <tr><td><code>numParticles</code></td><td>uint</td><td>粒子数</td></tr>
+      <tr><td><code>artificialAlpha</code>, <code>cohesion</code>, <code>soundSpeed</code></td><td>float</td><td>Monaghan 人工粘性 α / 凝集力 κ / 数値音速 c</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>4.2 <code>class SPHSimulator</code></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メソッド</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td class="wrap"><code>void Initialize(D3DContext&amp; d3d, float spacing, bool restTest = false)</code></td><td>パラメータ導出 (h = 2·spacing, dt = CFL·h/c からサブステップ数決定)、<code>cfg::WATER_BLOCKS</code> から粒子生成、GPU バッファとシェーダー生成</td></tr>
+      <tr><td class="wrap"><code>void Reset()</code></td><td>初期位置・速度 0 を再アップロード、時刻 0</td></tr>
+      <tr><td class="wrap"><code>void SortParticles()</code></td><td>格子構築 (Clear → Count → Scan → Reorder) のみ実行。ピンポンバッファが入れ替わる</td></tr>
+      <tr><td class="wrap"><code>void Step()</code></td><td>1 サブステップ (SortParticles → Density → Force → Integrate)</td></tr>
+      <tr><td class="wrap"><code>void StepFrame()</code></td><td><code>Step()</code> を <code>SubstepsPerFrame()</code> 回</td></tr>
+      <tr><td class="wrap"><code>NumParticles()</code> / <code>SubstepsPerFrame()</code> / <code>SubstepDt()</code> / <code>SimTime()</code></td><td>統計・状態</td></tr>
+      <tr><td class="wrap"><code>const SimParams&amp; Params()</code></td><td>現在のパラメータ</td></tr>
+      <tr><td class="wrap"><code>ID3D11Buffer* ParamsCB()</code></td><td>定数バッファ (MC が <code>b0</code> に束縛して再利用)</td></tr>
+      <tr><td class="wrap"><code>ID3D11ShaderResourceView* PositionSRV()</code></td><td>現在の位置バッファ (<code>float4</code> × N、直近のソート順)</td></tr>
+      <tr><td class="wrap"><code>ID3D11ShaderResourceView* CellStartSRV()</code></td><td>セル先頭インデックス (<code>uint</code> × numCells+1)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><b>前提条件:</b> <code>PositionSRV()</code> と <code>CellStartSRV()</code> を近傍探索に使う側 (MC) は、直前に <code>SortParticles()</code> を呼び格子と位置の整合を取ること。<code>Step()</code> 末尾の Integrate 後は位置が動いているため、そのままでは格子と一致しない。</div>
+
+  <h3>4.3 サブステップのパイプライン (sph.hlsl)</h3>
+  <figure>
+    <div class="frame">
+<pre class="mermaid">
+flowchart LR
+    subgraph SortParticles
+        C1["CS_ClearCells&lt;br/&gt;u0 cellCount = 0"] --> C2["CS_Count&lt;br/&gt;t0 pos → u0 cellCount (atomic)&lt;br/&gt;u2 cellIndex, u3 cellOffset"]
+        C2 --> C3["CS_Scan (1 グループ)&lt;br/&gt;u0 cellCount → u1 cellStart"]
+        C3 --> C4["CS_Reorder&lt;br/&gt;t0/t1 pos,vel + t2/t6/t7&lt;br/&gt;→ u4/u5 pos',vel' (ピンポン)"]
+    end
+    C4 --> D["CS_Density&lt;br/&gt;t0 pos, t2 cellStart&lt;br/&gt;→ u6 densPres (ρ, p)"]
+    D --> F["CS_Force&lt;br/&gt;t0 pos, t1 vel, t2 cellStart, t3 densPres&lt;br/&gt;→ u7 accel, u5 xsph"]
+    F --> I["CS_Integrate&lt;br/&gt;t0 pos, t1 vel, t4 accel, t5 xsph&lt;br/&gt;→ u4/u5 pos'',vel'' (ピンポン)"]
+</pre>
+    </div>
+    <figcaption><span class="tag">FIG 3</span>1 サブステップ = 7 回の Dispatch。各 Dispatch 後に UnbindCompute()</figcaption>
+  </figure>
+  <div class="tablewrap"><table>
+    <thead><tr><th>パス</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td><code>CS_Density</code></td><td>ρᵢ = m Σ W_poly6 + 境界ゴースト密度、p = max(0, B((ρ/ρ0)⁷ − 1))</td></tr>
+      <tr><td><code>CS_Force</code></td><td>圧力項 −Σ m (pᵢ/ρᵢ² + pⱼ/ρⱼ²) ∇W_spiky、粘性項 μ Σ m (vⱼ−vᵢ)/ρⱼ ∇²W_visc / ρᵢ、Monaghan 人工粘性 (接近対のみ)、凝集力 −κ Σ (xᵢ−xⱼ) W_poly6、XSPH Σ (m/ρⱼ)(vⱼ−vᵢ) W_poly6、重力</td></tr>
+      <tr><td><code>CS_Integrate</code></td><td>v += a·dt、速度上限、x += (v + ε·xsph)·dt、水槽壁 (高さ tankHeight 以下) / 床 / 領域 AABB との衝突</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>4.4 GPU バッファ一覧</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>バッファ</th><th>型</th><th>要素数</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td><code>m_pos[2]</code>, <code>m_vel[2]</code></td><td>float4</td><td>N</td><td>位置・速度 (ピンポン)</td></tr>
+      <tr><td><code>m_xsph</code></td><td>float4</td><td>N</td><td>XSPH 補正速度</td></tr>
+      <tr><td><code>m_accel</code></td><td>float4</td><td>N</td><td>加速度</td></tr>
+      <tr><td><code>m_densPres</code></td><td>float2</td><td>N</td><td>密度・圧力</td></tr>
+      <tr><td><code>m_cellIndex</code>, <code>m_cellOffset</code></td><td>uint</td><td>N</td><td>粒子の所属セル / セル内順序</td></tr>
+      <tr><td><code>m_cellCount</code></td><td>uint</td><td>numCells</td><td>セル内粒子数</td></tr>
+      <tr><td><code>m_cellStart</code></td><td>uint</td><td>numCells + 1</td><td>排他的累積和 (末尾 = N)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s5">
+  <h2><span class="num">5</span>MarchingCubes — GPU マーチングキューブ法</h2>
+
+  <h3>5.1 <code>struct MCParams</code> (定数バッファ <code>b1</code>)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メンバ</th><th>型</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td><code>origin[3]</code>, <code>cell</code></td><td>float</td><td>格子原点 / 格子間隔 (= spacing × 0.75)</td></tr>
+      <tr><td><code>dim[3]</code>, <code>numVerts</code></td><td>uint</td><td>格子点数 (各軸) / 総格子点数</td></tr>
+      <tr><td><code>isoLevel</code>, <code>fieldRadius</code>, <code>fieldInvR2</code></td><td>float</td><td>等値面レベル / カーネル半径 R (= h) / 1/R²</td></tr>
+      <tr><td><code>tableStride</code>, <code>maxTriangles</code></td><td>uint</td><td>テーブルの 1 パターン長 (32) / 三角形バッファ容量</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>5.2 <code>class MarchingCubes</code></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メソッド</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td class="wrap"><code>void Initialize(D3DContext&amp; d3d, float spacing)</code></td><td>格子設定、<code>mc::GenerateTriangleTable()</code> + <code>mc::SelfTest()</code> (失敗時は例外)、GPU リソース生成</td></tr>
+      <tr><td class="wrap"><code>void Build(SPHSimulator&amp; sim)</code></td><td>現在の粒子位置からメッシュを生成 (§5.3)。<b>呼び出し前に <code>sim.SortParticles()</code> 済みであること</b></td></tr>
+      <tr><td class="wrap"><code>ID3D11ShaderResourceView* TriangleSRV()</code></td><td>出力三角形 (<code>MCTriangle</code> × maxTriangles)</td></tr>
+      <tr><td class="wrap"><code>ID3D11Buffer* DrawArgs()</code></td><td><code>DrawInstancedIndirect</code> 引数 <code>{頂点数, 1, 0, 0}</code></td></tr>
+      <tr><td class="wrap"><code>const MCParams&amp; Params()</code></td><td>格子パラメータ</td></tr>
+      <tr><td class="wrap"><code>uint32_t LastTriangleCount()</code></td><td>三角形数を CPU に読み戻す (GPU 同期を伴うので統計表示用)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>5.3 メッシュ生成のパイプライン (mc.hlsl)</h3>
+  <figure>
+    <div class="frame">
+<pre class="mermaid">
+flowchart LR
+    F["CS_Field&lt;br/&gt;格子点ごと: F = Σ (1 − r²/R²)³&lt;br/&gt;t0 pos, t2 cellStart → u0 field"]
+    S["CS_Smooth × MC_SMOOTH_PASSES&lt;br/&gt;7 点フィルタ (中心 2, 6 近傍 1)/8&lt;br/&gt;t3 field → u0 fieldSmooth (ピンポン)"]
+    M["CS_MarchingCubes&lt;br/&gt;セルごと: 8 頂点 → mask → 交点補間&lt;br/&gt;t3 field, t4 triTable → u1 Append(MCTriangle)"]
+    CS["CopyStructureCount&lt;br/&gt;→ triCount"]
+    A["CS_MakeArgs&lt;br/&gt;u2 triCount → u3 drawArgs&lt;br/&gt;= {min(n, max)×3, 1, 0, 0}"]
+    F --> S --> M --> CS --> A
+</pre>
+    </div>
+    <figcaption><span class="tag">FIG 4</span>MarchingCubes::Build() — CPU への読み戻し無しで描画引数まで GPU 内で完結</figcaption>
+  </figure>
+  <p>出力頂点フォーマット (<code>water.hlsl</code> と共有):</p>
+<pre><code>struct MCVertex   { float3 p; float3 n; };      // 位置, 法線 (= −∇F を正規化)
+struct MCTriangle { MCVertex v0, v1, v2; };      // 72 byte、頂点順は外向き</code></pre>
+
+  <h3>5.4 <code>namespace mc</code> (MCTables.h)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>要素</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td><code>NUM_CASES = 256</code>, <code>TABLE_STRIDE = 32</code></td><td>テーブル寸法</td></tr>
+      <tr><td><code>EDGE_VERTS[12][2]</code></td><td>エッジ両端の頂点番号。頂点 v の座標 = (v&amp;1, (v&gt;&gt;1)&amp;1, (v&gt;&gt;2)&amp;1)、エッジ 0–3 = x、4–7 = y、8–11 = z 方向</td></tr>
+      <tr><td class="wrap"><code>std::vector&lt;int32_t&gt; GenerateTriangleTable()</code></td><td>256 パターンの三角形テーブルを生成 (エッジ番号 3 個ずつ、−1 終端)。曖昧面は「内側頂点を分離」規則で統一、ループの向きは外向き</td></tr>
+      <tr><td class="wrap"><code>bool SelfTest(const std::vector&lt;int32_t&gt;&amp; table, int32_t* outTriangleCount = nullptr)</code></td><td>球の距離場で CPU MC を実行し、閉多様体 (各有向エッジが 1 回、逆向きも 1 回) と外向きを検証</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s6">
+  <h2><span class="num">6</span>Renderer — 描画</h2>
+
+  <h3>6.1 <code>struct FrameParams</code> (定数バッファ <code>b0</code>、VS/PS 共通)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メンバ</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td><code>viewProj</code>, <code>view</code>, <code>lightViewProj</code></td><td>行列 (転置済み、HLSL は <code>mul(vec, M)</code>)</td></tr>
+      <tr><td><code>cameraPos</code></td><td>xyz = カメラ位置</td></tr>
+      <tr><td><code>lightDir</code></td><td>xyz = 光源へ向かう単位ベクトル</td></tr>
+      <tr><td><code>screenSize</code></td><td>xy = 内部解像度, zw = 逆数</td></tr>
+      <tr><td><code>params</code></td><td>x = 時刻, y = near, z = far</td></tr>
+      <tr><td><code>tank</code></td><td>x = 内側半幅, y = 外側半幅, z = 描画するガラス高さ, w = 床の高さ</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>6.2 <code>struct OrbitCamera</code></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メンバ / メソッド</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td><code>target</code>, <code>yawDeg</code>, <code>pitchDeg</code>, <code>distance</code>, <code>fovDeg</code></td><td>注視点まわりの軌道カメラ</td></tr>
+      <tr><td><code>XMVECTOR Eye()</code></td><td>視点位置</td></tr>
+      <tr><td><code>XMMATRIX View()</code></td><td><code>XMMatrixLookAtLH</code></td></tr>
+      <tr><td><code>XMMATRIX Proj(float aspect, float nearZ, float farZ)</code></td><td><code>XMMatrixPerspectiveFovLH</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>6.3 <code>class Renderer</code></h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>メソッド / メンバ</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td class="wrap"><code>void Initialize(D3DContext&amp; d3d)</code></td><td>レンダーターゲット (内部解像度 = ウィンドウ × SSAA)、メッシュ、ステート、シェーダー生成</td></tr>
+      <tr><td class="wrap"><code>void Render(SPHSimulator&amp; sim, MarchingCubes&amp; mc, float time)</code></td><td>§6.4 の全パスを実行してバックバッファへ出力 (Present は呼ばない)</td></tr>
+      <tr><td class="wrap"><code>OrbitCamera&amp; Camera()</code></td><td>カメラ (外部から編集可)</td></tr>
+      <tr><td class="wrap"><code>bool showParticles / showWater / showGlass</code></td><td>表示フラグ</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>6.4 描画パスの流れ</h3>
+  <figure>
+    <div class="frame">
+<pre class="mermaid">
+flowchart TD
+    P1["1. シャドウマップ (2048², 光源視点)&lt;br/&gt;VS_WaterShadow ← t0 三角形&lt;br/&gt;DrawInstancedIndirect"]
+    P2["2. 不透明パス → HDR RT (R16G16B16A16F)&lt;br/&gt;VS_Mesh / PS_Floor (t3 shadowMap)"]
+    P3["3. CopyResource&lt;br/&gt;HDR → sceneColorCopy, depth → sceneDepthCopy"]
+    P3b["3'. 水の裏面深度&lt;br/&gt;VS_WaterDepth, CullFront → waterBackDepth"]
+    P4["4. 水面 → HDR RT&lt;br/&gt;VS_Water / PS_Water&lt;br/&gt;t0 tri, t1 sceneColor, t2 sceneDepth,&lt;br/&gt;t3 shadow, t4 waterBack"]
+    P5["5. ガラス水槽 (乗算済みアルファ, 深度書込なし)&lt;br/&gt;VS_Mesh / PS_Glass"]
+    P6["(デバッグ) 粒子ポイント&lt;br/&gt;VS_Particles / PS_Particles ← t4 pos"]
+    P7["6. ポストプロセス → バックバッファ&lt;br/&gt;VS_Fullscreen / PS_Post ← t0 HDR&lt;br/&gt;SSAA 縮小・トーンマップ・周辺減光・ガンマ"]
+    P1 --> P2 --> P3 --> P3b --> P4 --> P5 --> P6 --> P7
+</pre>
+    </div>
+    <figcaption><span class="tag">FIG 5</span>Renderer::Render() — 番号付きは常時実行、(デバッグ) は showParticles 時のみ</figcaption>
+  </figure>
+  <p><code>PS_Water</code> の色: <code>lerp(屈折, 反射, フレネル) + ハイライト × 影</code>。屈折 = <code>sceneColorCopy</code> を法線でずらして参照 × <code>exp(−厚み × absorb)</code>、厚み = <code>min(背景深度, 裏面深度) − 表面深度</code>。</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="s7">
+  <h2><span class="num">7</span>HLSL リソース束縛一覧</h2>
+
+  <h3>7.1 定数バッファ</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>スロット</th><th>構造体</th><th>使用シェーダー</th></tr></thead>
+    <tbody>
+      <tr><td><code>b0</code></td><td><code>SimParams</code></td><td>sph.hlsl, mc.hlsl (格子の再利用)</td></tr>
+      <tr><td><code>b1</code></td><td><code>MCParams</code></td><td>mc.hlsl</td></tr>
+      <tr><td><code>b0</code></td><td><code>FrameParams</code></td><td>water.hlsl, scene.hlsl, post.hlsl</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>7.2 sph.hlsl</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>種別</th><th>スロット</th><th>名前</th><th>型</th></tr></thead>
+    <tbody>
+      <tr><td>SRV</td><td>t0 / t1</td><td><code>gPosIn</code> / <code>gVelIn</code></td><td><code>StructuredBuffer&lt;float4&gt;</code></td></tr>
+      <tr><td>SRV</td><td>t2</td><td><code>gCellStart</code></td><td><code>StructuredBuffer&lt;uint&gt;</code></td></tr>
+      <tr><td>SRV</td><td>t3</td><td><code>gDensPres</code></td><td><code>StructuredBuffer&lt;float2&gt;</code></td></tr>
+      <tr><td>SRV</td><td>t4 / t5</td><td><code>gAccel</code> / <code>gXsph</code></td><td><code>StructuredBuffer&lt;float4&gt;</code></td></tr>
+      <tr><td>SRV</td><td>t6 / t7</td><td><code>gCellIndex</code> / <code>gCellOffset</code></td><td><code>StructuredBuffer&lt;uint&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u0 / u1</td><td><code>gCellCount</code> / <code>gCellStartRW</code></td><td><code>RWStructuredBuffer&lt;uint&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u2 / u3</td><td><code>gCellIndexRW</code> / <code>gCellOffsetRW</code></td><td><code>RWStructuredBuffer&lt;uint&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u4 / u5</td><td><code>gPosOut</code> / <code>gVelOut</code> (CS_Force では XSPH 出力)</td><td><code>RWStructuredBuffer&lt;float4&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u6</td><td><code>gDensPresRW</code></td><td><code>RWStructuredBuffer&lt;float2&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u7</td><td><code>gAccelRW</code></td><td><code>RWStructuredBuffer&lt;float4&gt;</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>エントリポイント: <code>CS_ClearCells</code>, <code>CS_Count</code>, <code>CS_Scan</code> (1024 スレッド × 1 グループ), <code>CS_Reorder</code>, <code>CS_Density</code>, <code>CS_Force</code>, <code>CS_Integrate</code> (256 スレッド/グループ)</p>
+
+  <h3>7.3 mc.hlsl</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>種別</th><th>スロット</th><th>名前</th><th>型</th></tr></thead>
+    <tbody>
+      <tr><td>SRV</td><td>t0</td><td><code>gPos</code></td><td><code>StructuredBuffer&lt;float4&gt;</code></td></tr>
+      <tr><td>SRV</td><td>t2</td><td><code>gCellStart</code></td><td><code>StructuredBuffer&lt;uint&gt;</code></td></tr>
+      <tr><td>SRV</td><td>t3</td><td><code>gField</code></td><td><code>StructuredBuffer&lt;float&gt;</code></td></tr>
+      <tr><td>SRV</td><td>t4</td><td><code>gTriTable</code></td><td><code>StructuredBuffer&lt;int&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u0</td><td><code>gFieldRW</code></td><td><code>RWStructuredBuffer&lt;float&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u1</td><td><code>gTriangles</code></td><td><code>AppendStructuredBuffer&lt;MCTriangle&gt;</code></td></tr>
+      <tr><td>UAV</td><td>u2 / u3</td><td><code>gTriCount</code> / <code>gDrawArgs</code></td><td><code>RWByteAddressBuffer</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>エントリポイント: <code>CS_Field</code>, <code>CS_Smooth</code>, <code>CS_MarchingCubes</code>, <code>CS_MakeArgs</code></p>
+
+  <h3>7.4 描画シェーダー</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>ファイル</th><th>エントリ</th><th>入力</th><th>主なリソース</th></tr></thead>
+    <tbody>
+      <tr><td>water.hlsl</td><td><code>VS_Water</code>, <code>VS_WaterShadow</code>, <code>VS_WaterDepth</code></td><td><code>SV_VertexID</code> (頂点バッファ無し)</td><td>t0 gTriangles</td></tr>
+      <tr><td>water.hlsl</td><td><code>PS_Water</code></td><td>–</td><td>t1 gSceneColor, t2 gSceneDepth, t3 gShadowMap, t4 gWaterBack</td></tr>
+      <tr><td>water.hlsl</td><td><code>VS_Particles</code> / <code>PS_Particles</code></td><td><code>SV_VertexID</code> (粒子あたり 6 頂点)</td><td>t4 gParticlePos</td></tr>
+      <tr><td>scene.hlsl</td><td><code>VS_Mesh</code></td><td>POSITION(float3), NORMAL(float3)</td><td>–</td></tr>
+      <tr><td>scene.hlsl</td><td><code>PS_Floor</code> / <code>PS_Glass</code></td><td>–</td><td>t3 gShadowMap</td></tr>
+      <tr><td>post.hlsl</td><td><code>VS_Fullscreen</code> / <code>PS_Post</code></td><td><code>SV_VertexID</code> (3 頂点)</td><td>t0 gHdr</td></tr>
+      <tr><td>共通</td><td>–</td><td>–</td><td>s0 gLinearClamp, s1 gShadowCmp (比較サンプラ)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s8">
+  <h2><span class="num">8</span>初期化シーケンス</h2>
+  <figure>
+    <div class="frame">
+<pre class="mermaid">
+sequenceDiagram
+    participant M as main
+    participant D as D3DContext
+    participant S as SPHSimulator
+    participant C as MarchingCubes
+    participant T as mc (MCTables)
+    participant R as Renderer
+
+    M->>D: Initialize(hwnd, W, H, debug)
+    M->>S: Initialize(d3d, spacing, restTest)
+    S->>S: パラメータ導出 / 粒子生成 (WATER_BLOCKS)
+    S->>D: CreateStructured × 12, CreateConstantBuffer, CreateCS × 7
+    M->>C: Initialize(d3d, spacing)
+    C->>T: GenerateTriangleTable()
+    C->>T: SelfTest(table)
+    T-->>C: true (失敗なら例外)
+    C->>D: CreateStructured / CreateRaw / CreateCS × 4
+    M->>R: Initialize(d3d)
+    R->>D: テクスチャ・ステート・CreateVS/PS × 11
+    loop 毎フレーム
+        M->>S: StepFrame()
+        M->>S: SortParticles()
+        M->>C: Build(sim)
+        M->>R: Render(sim, mc, time)
+        M->>D: SwapChain()->Present()
+    end
+</pre>
+    </div>
+    <figcaption><span class="tag">FIG 6</span>起動から定常ループまで</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section id="s9">
+  <h2><span class="num">9</span>エラーと制約</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>状況</th><th>挙動</th></tr></thead>
+    <tbody>
+      <tr><td>シェーダーコンパイル失敗</td><td><code>D3DContext::CompileShader</code> が stderr にエラー文を出力し <code>std::runtime_error</code> を送出。<code>main</code> が捕捉して MessageBox 表示後に終了コード 1</td></tr>
+      <tr><td>MC テーブル自己検証失敗</td><td><code>MarchingCubes::Initialize</code> が例外</td></tr>
+      <tr><td>三角形数が <code>MC_MAX_TRIANGLES</code> (1,048,576) を超過</td><td>超過分の Append は破棄され、<code>CS_MakeArgs</code> が描画数を容量でクランプ (穴が空くが落ちない)</td></tr>
+      <tr><td>粒子の速度超過</td><td><code>maxSpeed = 0.5 h / dt</code> でクランプ (爆発防止)</td></tr>
+      <tr><td>SRV/UAV の同時束縛</td><td>各 Dispatch 後に <code>UnbindCompute()</code> で解除する規約</td></tr>
+      <tr><td>機能レベル</td><td>D3D 11.0 以上 (UAV は u0–u7 の範囲のみ使用)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="s10">
+  <h2><span class="num">10</span>主要パラメータの既定値 (SimConfig.h)</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>定数</th><th>値</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td><code>WINDOW_W × WINDOW_H</code>, <code>SSAA</code></td><td class="num-col">1280 × 720, 2</td><td>出力解像度と内部倍率</td></tr>
+      <tr><td><code>VIDEO_FPS</code>, <code>FRAME_DT</code></td><td class="num-col">24, 1/24</td><td>固定ステップ</td></tr>
+      <tr><td><code>DEFAULT_SPACING</code>, <code>H_PER_SPACING</code></td><td class="num-col">0.014, 2.0</td><td>粒子間隔, h = 2d</td></tr>
+      <tr><td><code>REST_DENSITY</code>, <code>SOUND_SPEED</code>, <code>TAIT_GAMMA</code></td><td class="num-col">1000, 12, 7</td><td>状態方程式</td></tr>
+      <tr><td><code>VISCOSITY_MU</code>, <code>ARTIFICIAL_VISC_ALPHA</code>, <code>XSPH_EPS</code></td><td class="num-col">0.5, 0.08, 0.15</td><td>減衰項</td></tr>
+      <tr><td><code>SCENE_SCALE</code>, <code>GRAVITY</code></td><td class="num-col">2.0, 9.81/2</td><td>フルード相似</td></tr>
+      <tr><td><code>CFL</code></td><td class="num-col">0.4</td><td>dt = CFL·h/c</td></tr>
+      <tr><td><code>TANK_INNER_HALF</code>, <code>TANK_HEIGHT</code>, <code>GLASS_VISIBLE_HEIGHT</code></td><td class="num-col">0.5, 1.6, 0.3</td><td>水槽 (衝突は 1.6 まで、描画は 0.3 まで)</td></tr>
+      <tr><td><code>MC_CELL_PER_SPACING</code>, <code>MC_FIELD_RADIUS_PER_SPACING</code>, <code>MC_ISO_LEVEL</code>, <code>MC_SMOOTH_PASSES</code></td><td class="num-col">0.75, 2.0, 0.5, 2</td><td>メッシュ生成</td></tr>
+      <tr><td><code>CAM_YAW_DEG</code>, <code>CAM_PITCH_DEG</code>, <code>CAM_DISTANCE</code>, <code>CAM_FOV_DEG</code></td><td class="num-col">−45, 30, 3.2, 40</td><td>カメラ</td></tr>
+      <tr><td><code>LIGHT_DIR</code></td><td class="num-col">(0.15, 1, −0.9)</td><td>光源方向</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+</main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  // mermaid で <pre class="mermaid"> を描画する (ブラウザ / 印刷共通)
+  mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose',
+                       flowchart: { htmlLabels: true, useMaxWidth: true } });
+  mermaid.run({ querySelector: 'pre.mermaid' }).then(function () { document.body.dataset.mermaidDone = '1'; });
+</script>
+</body>
+</html>
