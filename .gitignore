@@ -1,0 +1,12 @@
+# ビルド生成物 (build.bat が build\ に出力する)
+build/
+build_cmake/
+*.obj
+*.exe
+*.pdb
+*.ilk
+# 録画した連番 BMP
+capture/
+capture_*/
+# 会話ログのエクスポート
+*.txt
