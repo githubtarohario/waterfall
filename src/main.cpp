@@ -10,6 +10,7 @@
 //    --record [dir]  各フレームを BMP で保存 (既定 capture/)。24fps 固定ステップ
 //    --frames <n>    n フレーム描画したら自動終了
 //    --particles     粒子を点で表示するデバッグモードで開始
+//    --nowater       水面メッシュを描かない (粒子表示と組み合わせて使う)
 //    --debug         D3D11 デバッグレイヤーを有効化
 //    --resttest      水塊 A を床に静置する安定性テストシーン
 //
@@ -141,7 +142,7 @@ int main(int argc, char** argv)
     // コマンドライン解析
     // ------------------------------------------------------------
     float spacing = cfg::DEFAULT_SPACING;
-    bool  record = false, debugLayer = false, particles = false, restTest = false;
+    bool  record = false, debugLayer = false, particles = false, restTest = false, noWater = false;
     int   maxFrames = -1;
     std::string recordDir = "capture";
     for (int i = 1; i < argc; ++i)
@@ -154,6 +155,7 @@ int main(int argc, char** argv)
         }
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) maxFrames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--particles")) particles = true;
+        else if (!strcmp(argv[i], "--nowater")) noWater = true;
         else if (!strcmp(argv[i], "--debug")) debugLayer = true;
         else if (!strcmp(argv[i], "--resttest")) restTest = true;   // 水塊を床に静置する安定性テスト
     }
@@ -199,6 +201,7 @@ int main(int argc, char** argv)
         return 1;
     }
     renderer.showParticles = particles;
+    renderer.showWater     = !noWater;
 
     // ------------------------------------------------------------
     // メインループ: 1 描画フレーム = 動画の 1 フレーム (1/24 秒)

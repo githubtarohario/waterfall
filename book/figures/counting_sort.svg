@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 250" width="560" height="250" font-family="Consolas, Meiryo, monospace" font-size="11">
+<text x="186" y="12" font-size="9" fill="#666" text-anchor="middle">p0</text>
+<text x="220" y="12" font-size="9" fill="#666" text-anchor="middle">p1</text>
+<text x="254" y="12" font-size="9" fill="#666" text-anchor="middle">p2</text>
+<text x="288" y="12" font-size="9" fill="#666" text-anchor="middle">p3</text>
+<text x="322" y="12" font-size="9" fill="#666" text-anchor="middle">p4</text>
+<text x="356" y="12" font-size="9" fill="#666" text-anchor="middle">p5</text>
+<text x="390" y="12" font-size="9" fill="#666" text-anchor="middle">p6</text>
+<text x="424" y="12" font-size="9" fill="#666" text-anchor="middle">p7</text>
+<text x="8" y="33" font-size="11" font-family="Meiryo, sans-serif" fill="#1a222b">所属セル (CS_Count)</text>
+<rect x="170" y="18" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="186" y="33" text-anchor="middle" fill="#1a222b">2</text>
+<rect x="204" y="18" width="32" height="22" fill="#fde2e1" stroke="#7b8794"/>
+<text x="220" y="33" text-anchor="middle" fill="#1a222b">0</text>
+<rect x="238" y="18" width="32" height="22" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="254" y="33" text-anchor="middle" fill="#1a222b">1</text>
+<rect x="272" y="18" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="288" y="33" text-anchor="middle" fill="#1a222b">2</text>
+<rect x="306" y="18" width="32" height="22" fill="#fde2e1" stroke="#7b8794"/>
+<text x="322" y="33" text-anchor="middle" fill="#1a222b">0</text>
+<rect x="340" y="18" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="356" y="33" text-anchor="middle" fill="#1a222b">2</text>
+<rect x="374" y="18" width="32" height="22" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="390" y="33" text-anchor="middle" fill="#1a222b">3</text>
+<rect x="408" y="18" width="32" height="22" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="424" y="33" text-anchor="middle" fill="#1a222b">1</text>
+<text x="8" y="79" font-size="11" font-family="Meiryo, sans-serif" fill="#1a222b">cellCount</text>
+<rect x="170" y="64" width="32" height="22" fill="#fde2e1" stroke="#7b8794"/>
+<text x="186" y="79" text-anchor="middle" fill="#1a222b">2</text>
+<rect x="204" y="64" width="32" height="22" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="220" y="79" text-anchor="middle" fill="#1a222b">2</text>
+<rect x="238" y="64" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="254" y="79" text-anchor="middle" fill="#1a222b">3</text>
+<rect x="272" y="64" width="32" height="22" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="288" y="79" text-anchor="middle" fill="#1a222b">1</text>
+<text x="8" y="119" font-size="11" font-family="Meiryo, sans-serif" fill="#1a222b">cellStart (排他的累積和)</text>
+<rect x="170" y="104" width="32" height="22" fill="#fde2e1" stroke="#7b8794"/>
+<text x="186" y="119" text-anchor="middle" fill="#1a222b">0</text>
+<rect x="204" y="104" width="32" height="22" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="220" y="119" text-anchor="middle" fill="#1a222b">2</text>
+<rect x="238" y="104" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="254" y="119" text-anchor="middle" fill="#1a222b">4</text>
+<rect x="272" y="104" width="32" height="22" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="288" y="119" text-anchor="middle" fill="#1a222b">7</text>
+<rect x="306" y="104" width="32" height="22" fill="#eee" stroke="#7b8794"/>
+<text x="322" y="119" text-anchor="middle" fill="#1a222b">8</text>
+<text x="8" y="167" font-size="11" font-family="Meiryo, sans-serif" fill="#1a222b">並べ替え後 (CS_Reorder)</text>
+<rect x="170" y="152" width="32" height="22" fill="#fde2e1" stroke="#7b8794"/>
+<text x="186" y="167" text-anchor="middle" fill="#1a222b">p1</text>
+<rect x="204" y="152" width="32" height="22" fill="#fde2e1" stroke="#7b8794"/>
+<text x="220" y="167" text-anchor="middle" fill="#1a222b">p4</text>
+<rect x="238" y="152" width="32" height="22" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="254" y="167" text-anchor="middle" fill="#1a222b">p2</text>
+<rect x="272" y="152" width="32" height="22" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="288" y="167" text-anchor="middle" fill="#1a222b">p7</text>
+<rect x="306" y="152" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="322" y="167" text-anchor="middle" fill="#1a222b">p0</text>
+<rect x="340" y="152" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="356" y="167" text-anchor="middle" fill="#1a222b">p3</text>
+<rect x="374" y="152" width="32" height="22" fill="#dfeaf7" stroke="#7b8794"/>
+<text x="390" y="167" text-anchor="middle" fill="#1a222b">p5</text>
+<rect x="408" y="152" width="32" height="22" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="424" y="167" text-anchor="middle" fill="#1a222b">p6</text>
+<text x="203.0" y="192" font-size="9" fill="#666" text-anchor="middle">セル0</text>
+<text x="271.0" y="192" font-size="9" fill="#666" text-anchor="middle">セル1</text>
+<text x="356" y="192" font-size="9" fill="#666" text-anchor="middle">セル2</text>
+<text x="424" y="192" font-size="9" fill="#666" text-anchor="middle">セル3</text>
+<text x="8" y="228" font-size="11" font-family="Meiryo, sans-serif" fill="#1a222b">書き込み先 = cellStart[cell] + cellOffset  (cellOffset は Count 時のアトミック加算で得た順序番号)</text>
+</svg>

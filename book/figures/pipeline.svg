@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 170" width="640" height="170" font-family="Meiryo, sans-serif" font-size="11">
+<rect x="10" y="30" width="140" height="80" rx="8" fill="#d9eef0" stroke="#7b8794"/>
+<text x="80" y="55" text-anchor="middle" font-weight="bold" fill="#1a222b">SPH 法</text>
+<text x="80" y="76" text-anchor="middle" fill="#4c5866" font-size="10">粒子の位置・速度</text>
+<text x="80" y="91" text-anchor="middle" fill="#4c5866" font-size="10">(GPU, 45 サブステップ)</text>
+<line x1="150" y1="70" x2="168" y2="70" stroke="#1a222b" stroke-width="1.5"/><polygon points="168,70 162,65 162,75" fill="#1a222b"/>
+<rect x="168" y="30" width="140" height="80" rx="8" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="238" y="55" text-anchor="middle" font-weight="bold" fill="#1a222b">スカラー場</text>
+<text x="238" y="76" text-anchor="middle" fill="#4c5866" font-size="10">粒子 → 格子点の値</text>
+<text x="238" y="91" text-anchor="middle" fill="#4c5866" font-size="10">(GPU)</text>
+<line x1="308" y1="70" x2="326" y2="70" stroke="#1a222b" stroke-width="1.5"/><polygon points="326,70 320,65 320,75" fill="#1a222b"/>
+<rect x="326" y="30" width="140" height="80" rx="8" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="396" y="55" text-anchor="middle" font-weight="bold" fill="#1a222b">マーチングキューブ</text>
+<text x="396" y="76" text-anchor="middle" fill="#4c5866" font-size="10">等値面 → 三角形</text>
+<text x="396" y="91" text-anchor="middle" fill="#4c5866" font-size="10">(GPU, Append)</text>
+<line x1="466" y1="70" x2="484" y2="70" stroke="#1a222b" stroke-width="1.5"/><polygon points="484,70 478,65 478,75" fill="#1a222b"/>
+<rect x="484" y="30" width="140" height="80" rx="8" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="554" y="55" text-anchor="middle" font-weight="bold" fill="#1a222b">レンダリング</text>
+<text x="554" y="76" text-anchor="middle" fill="#4c5866" font-size="10">影・反射・屈折</text>
+<text x="554" y="91" text-anchor="middle" fill="#4c5866" font-size="10">(GPU)</text>
+<text x="10" y="140" fill="#4c5866" font-size="10.5">1 描画フレーム (= 動画の 1/24 秒) ごとにこの 4 段階を通る。粒子データは GPU から出ないので CPU との往復は無い。</text>
+</svg>

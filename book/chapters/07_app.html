@@ -1,0 +1,83 @@
+<h1><span class="chap">第 7 章</span>アプリケーションの骨格 ― ウィンドウ、カメラ、録画</h1>
+
+<p class="lead">シミュレーションとレンダリングを「動くプログラム」にするには、ウィンドウの管理、入力、カメラ、そして結果を保存する仕組みが要ります。派手さはありませんが、実験を繰り返すための土台です。</p>
+
+<h2>7.1 Win32 ウィンドウとメッセージループ</h2>
+<p>Windows のアプリケーションは、OS から送られてくるメッセージ (キー入力、マウス、ウィンドウの破棄など) をウィンドウプロシージャで処理します。本プログラムはゲーム的な構成で、<code>PeekMessage</code> でメッセージを溜めずに処理し、残りの時間で 1 フレーム進めます。</p>
+
+{{fn:src/main.cpp:WndProc}}
+
+<p>プロシージャは入力を「フラグ」に記録するだけで、実際の処理 (リセット、一時停止など) はメインループの先頭でまとめて行います。ウィンドウプロシージャの中で重い処理や GPU の操作を行わないのは、メッセージ処理を短く保つための定石です。</p>
+
+<h2>7.2 軌道カメラ</h2>
+<p>カメラは注視点を中心に回る「軌道カメラ」です。ヨー (水平角)、ピッチ (仰角)、距離の 3 つで視点位置が決まります。</p>
+<div class="eq">\[ \mathbf{e} = \mathbf{t} + D\,(\sin\phi\cos\theta,\ \sin\theta,\ \cos\phi\cos\theta) \]</div>
+<p>\(\phi\) がヨー、\(\theta\) がピッチです。ビュー行列は <code>XMMatrixLookAtLH</code>、射影行列は垂直画角 40° の <code>XMMatrixPerspectiveFovLH</code> で作ります。</p>
+
+{{range:src/Renderer.cpp|XMVECTOR OrbitCamera::Eye() const|return XMMatrixPerspectiveFovLH(XMConvertToRadians(fovDeg), aspect, nearZ, farZ);}}
+
+<h3>行列の受け渡し</h3>
+<p>DirectXMath の行列は行優先で、ベクトルを行ベクトルとして右から行列を掛ける規約です。一方 HLSL の定数バッファは既定で列優先に格納されます。両者を合わせる最も簡単な方法は、C++ 側で転置してから定数バッファに書き、HLSL 側で <code>mul(vec, M)</code> と書くことです。本プログラムはこの方法をとっています。</p>
+
+{{fn:src/Renderer.cpp:Renderer::UpdateFrameParams}}
+
+<h2>7.3 フレームの録画</h2>
+<p><code>--record</code> を付けると、毎フレーム描画後にバックバッファを CPU に読み戻し、24 ビットの BMP として保存します。GPU のテクスチャは直接 CPU から読めないので、<code>STAGING</code> 用途のテクスチャに <code>CopyResource</code> してから <code>Map</code> します。BMP はヘッダが 54 バイトの単純な形式で、外部ライブラリなしで書けます (行が下から上、各ピクセルが BGR 順、行の長さが 4 の倍数、という 3 つの癖だけ覚えておけば十分です)。</p>
+
+{{fn:src/main.cpp:SaveBackBufferBMP}}
+
+<p>録画時は <code>Present(0, 0)</code> で垂直同期を待たず、計算が終わり次第次のフレームへ進みます。1 フレームの物理時間は固定なので、どれだけ時間がかかっても 24fps の動画が得られます。連番画像から動画ファイルを作るには ffmpeg などを使います。</p>
+<pre><code>ffmpeg -framerate 24 -i capture/frame_%04d.bmp -pix_fmt yuv420p splash.mp4</code></pre>
+
+<h2>7.4 ビルド</h2>
+<p><code>build.bat</code> は Visual Studio の <code>vcvars64.bat</code> で環境変数を設定してから <code>cl</code> を直接呼びます。プロジェクトファイルを作らずに済むので、ソースが数ファイルのプログラムでは手軽です。</p>
+<ul>
+  <li><code>/utf-8</code>: ソースは UTF-8 で書かれており、日本語コメントを正しく扱うために必要です。</li>
+  <li><code>/std:c++17</code>, <code>/EHsc</code>: C++17 と例外を有効にします。</li>
+  <li><code>/SUBSYSTEM:CONSOLE</code>: ウィンドウアプリですが、統計情報を <code>printf</code> でコンソールにも出したいのでコンソールサブシステムにしています。</li>
+</ul>
+<div class="warn"><code>build.bat</code> のコメントが英語なのは、<code>cmd.exe</code> が UTF-8 の日本語を正しく解釈できず、日本語を含む行で構文エラーになることがあるためです。バッチファイルだけは ASCII で書く、というのが Windows 開発の小さな教訓です。</div>
+
+<h2>7.5 起動から終了までのシーケンス</h2>
+<div class="mermaid-wrap"><pre class="mermaid">
+sequenceDiagram
+    participant M as main
+    participant D as D3DContext
+    participant S as SPHSimulator
+    participant C as MarchingCubes
+    participant R as Renderer
+    M->>D: Initialize(hwnd, 1280, 720)
+    M->>S: Initialize(d3d, spacing)
+    S->>D: バッファ生成 / CS × 7 コンパイル
+    M->>C: Initialize(d3d, spacing)
+    C->>C: テーブル生成 + 自己検証
+    C->>D: バッファ生成 / CS × 4 コンパイル
+    M->>R: Initialize(d3d)
+    R->>D: RT / ステート / VS,PS × 11
+    loop 毎フレーム
+        M->>S: StepFrame() (45 サブステップ)
+        M->>S: SortParticles()
+        M->>C: Build(sim)
+        M->>R: Render(sim, mc, t)
+        M->>D: Present()
+        M-->>M: (--record なら BMP 保存)
+    end
+</pre></div>
+
+<h2>7.6 コマンドラインとキー操作</h2>
+<table>
+  <tr><th>オプション</th><th>説明</th></tr>
+  <tr><td><code>--spacing &lt;m&gt;</code></td><td>粒子間隔。既定 0.014</td></tr>
+  <tr><td><code>--record [dir]</code></td><td>連番 BMP を保存 (既定 <code>capture/</code>)</td></tr>
+  <tr><td><code>--frames &lt;n&gt;</code></td><td>n フレームで自動終了</td></tr>
+  <tr><td><code>--particles</code></td><td>粒子表示で開始</td></tr>
+  <tr><td><code>--resttest</code></td><td>水塊を床に静置するテストシーン</td></tr>
+  <tr><td><code>--debug</code></td><td>D3D11 デバッグレイヤー</td></tr>
+</table>
+<table>
+  <tr><th>キー</th><th>動作</th></tr>
+  <tr><td>Space / S / R</td><td>一時停止 / 1 フレーム進める / リセット</td></tr>
+  <tr><td>P / W / G</td><td>粒子表示 / 水面 / ガラスの切り替え</td></tr>
+  <tr><td>右ドラッグ / ホイール</td><td>カメラ回転 / ズーム</td></tr>
+  <tr><td>Esc</td><td>終了</td></tr>
+</table>

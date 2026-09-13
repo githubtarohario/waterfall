@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 150" width="640" height="150" font-family="Meiryo, sans-serif" font-size="10.5">
+<rect x="10" y="40" width="78" height="56" rx="6" fill="#eef2f5" stroke="#7b8794"/>
+<text x="49" y="62" text-anchor="middle" fill="#1a222b">シャドウ</text>
+<text x="49" y="77" text-anchor="middle" fill="#1a222b">マップ</text>
+<line x1="88" y1="68" x2="100" y2="68" stroke="#1a222b" stroke-width="1.5"/><polygon points="100,68 95,64 95,72" fill="#1a222b"/>
+<rect x="100" y="40" width="78" height="56" rx="6" fill="#eef2f5" stroke="#7b8794"/>
+<text x="139" y="62" text-anchor="middle" fill="#1a222b">床</text>
+<text x="139" y="77" text-anchor="middle" fill="#1a222b">(HDR RT)</text>
+<line x1="178" y1="68" x2="190" y2="68" stroke="#1a222b" stroke-width="1.5"/><polygon points="190,68 185,64 185,72" fill="#1a222b"/>
+<rect x="190" y="40" width="78" height="56" rx="6" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="229" y="62" text-anchor="middle" fill="#1a222b">色/深度</text>
+<text x="229" y="77" text-anchor="middle" fill="#1a222b">コピー</text>
+<line x1="268" y1="68" x2="280" y2="68" stroke="#1a222b" stroke-width="1.5"/><polygon points="280,68 275,64 275,72" fill="#1a222b"/>
+<rect x="280" y="40" width="78" height="56" rx="6" fill="#f5e9d6" stroke="#7b8794"/>
+<text x="319" y="62" text-anchor="middle" fill="#1a222b">水の</text>
+<text x="319" y="77" text-anchor="middle" fill="#1a222b">裏面深度</text>
+<line x1="358" y1="68" x2="370" y2="68" stroke="#1a222b" stroke-width="1.5"/><polygon points="370,68 365,64 365,72" fill="#1a222b"/>
+<rect x="370" y="40" width="78" height="56" rx="6" fill="#d9eef0" stroke="#7b8794"/>
+<text x="409" y="62" text-anchor="middle" fill="#1a222b">水面</text>
+<text x="409" y="77" text-anchor="middle" fill="#1a222b">(HDR RT)</text>
+<line x1="448" y1="68" x2="460" y2="68" stroke="#1a222b" stroke-width="1.5"/><polygon points="460,68 455,64 455,72" fill="#1a222b"/>
+<rect x="460" y="40" width="78" height="56" rx="6" fill="#d9eef0" stroke="#7b8794"/>
+<text x="499" y="62" text-anchor="middle" fill="#1a222b">ガラス</text>
+<text x="499" y="77" text-anchor="middle" fill="#1a222b">(HDR RT)</text>
+<line x1="538" y1="68" x2="550" y2="68" stroke="#1a222b" stroke-width="1.5"/><polygon points="550,68 545,64 545,72" fill="#1a222b"/>
+<rect x="550" y="40" width="78" height="56" rx="6" fill="#e3f4e5" stroke="#7b8794"/>
+<text x="589" y="62" text-anchor="middle" fill="#1a222b">ポスト</text>
+<text x="589" y="77" text-anchor="middle" fill="#1a222b">→ 画面</text>
+<text x="10" y="20" font-size="11" fill="#4c5866">Renderer::Render() の 7 段階。中央の 2 段は「水を描く前の画」を屈折と厚み推定のために保存する。</text>
+<text x="10" y="128" font-size="10" fill="#4c5866">HDR RT = R16G16B16A16_FLOAT。内部解像度はウィンドウの 2 倍 (SSAA)。最終段で 2×2 平均・トーンマップ・ガンマ補正。</text>
+</svg>

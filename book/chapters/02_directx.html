@@ -1,0 +1,130 @@
+<h1><span class="chap">第 2 章</span>DirectX 11 と GPU プログラミングの基礎</h1>
+
+<p class="lead">GPU は「同じ処理を大量のデータに一斉に適用する」ことに特化した計算機です。本章では DirectX 11 を通して GPU に仕事をさせるための最小限の概念 ― デバイス、リソース、ビュー、シェーダー、そしてコンピュートシェーダー ― を、本プログラムの <code>D3DUtil.cpp</code> を読みながら身につけます。</p>
+
+<h2>2.1 CPU と GPU の役割分担</h2>
+<p>CPU は少数の高性能なコアで複雑な分岐を伴う処理を得意とし、GPU は数千の単純なコアで同じ命令を並列に実行することを得意とします。流体シミュレーションは「全粒子について同じ計算をする」「全格子点について同じ計算をする」という典型的な GPU 向きの問題です。</p>
+<p>DirectX 11 では、CPU 側のプログラムは次のことだけを行います。</p>
+<ol>
+  <li>GPU 上にメモリ (リソース) を確保し、初期データを転送する</li>
+  <li>GPU で実行する小さなプログラム (シェーダー) をコンパイルする</li>
+  <li>「このシェーダーを、このリソースを入出力として、これだけの並列度で実行せよ」というコマンドを積む</li>
+</ol>
+<p>コマンドは <code>ID3D11DeviceContext</code> を通じて発行され、GPU は非同期に処理します。CPU は結果を待たずに次のコマンドを積めるため、両者は並行して動きます。結果を CPU に読み戻す (Map) と、その時点で GPU の完了を待つことになるので、本プログラムでは統計表示用の三角形数を読む場面以外では読み戻しをしません。</p>
+
+<h2>2.2 デバイスとスワップチェーン</h2>
+<p><code>ID3D11Device</code> はリソース生成のための工場、<code>ID3D11DeviceContext</code> はコマンド発行のための窓口、<code>IDXGISwapChain</code> はウィンドウに表示するための画像 (バックバッファ) を管理するオブジェクトです。3 つはまとめて生成できます。</p>
+
+{{fn:src/D3DUtil.cpp:D3DContext::Initialize}}
+
+<p>ポイントを 3 つ挙げます。</p>
+<ul>
+  <li><strong>機能レベル</strong> (<code>D3D_FEATURE_LEVEL_11_0</code> 以上) を要求しています。コンピュートシェーダーと構造化バッファには 11.0 が必要です。</li>
+  <li><strong>デバッグレイヤー</strong> (<code>D3D11_CREATE_DEVICE_DEBUG</code>) を有効にすると、リソースの束縛ミスなどが実行時に警告として出ます。SDK が無い環境では失敗するので、失敗したら通常モードで再試行します。</li>
+  <li>シェーダーは実行時にファイルから読むので、<strong>シェーダーディレクトリ</strong>を実行ファイルの位置から探しています。ビルドし直さずに <code>.hlsl</code> を編集して結果を見られるのは開発中とても便利です。</li>
+</ul>
+
+<h2>2.3 リソースとビュー</h2>
+<p>DirectX 11 でデータを置く場所を <span class="keyterm">リソース</span> と呼びます。バッファ (1 次元の配列) とテクスチャ (2 次元・3 次元の画像) の 2 種類があります。重要なのは、シェーダーはリソースを直接扱うのではなく、<span class="keyterm">ビュー</span> という「窓」を通して扱うことです。同じリソースでも、用途に応じて別のビューを作ります。</p>
+
+<table>
+  <tr><th>ビュー</th><th>略称</th><th>用途</th><th>HLSL 側のレジスタ</th></tr>
+  <tr><td>Shader Resource View</td><td>SRV</td><td>シェーダーからの読み取り</td><td><code>t0, t1, …</code></td></tr>
+  <tr><td>Unordered Access View</td><td>UAV</td><td>シェーダーからの読み書き (順序保証なし)</td><td><code>u0, u1, …</code></td></tr>
+  <tr><td>Render Target View</td><td>RTV</td><td>ピクセルシェーダーの描き込み先</td><td>(パイプライン出力)</td></tr>
+  <tr><td>Depth Stencil View</td><td>DSV</td><td>深度テストの深度バッファ</td><td>(パイプライン出力)</td></tr>
+</table>
+
+<p>本プログラムで多用するのは <span class="keyterm">構造化バッファ</span> (StructuredBuffer) です。C++ の構造体配列と同じイメージで、要素サイズ (stride) と要素数を指定して作ります。次の関数は 1 つのバッファに SRV と UAV の両方を作って返します。</p>
+
+{{fn:src/D3DUtil.cpp:D3DContext::CreateStructured}}
+
+<p><code>append=true</code> のときの UAV には <strong>カウンタ</strong>が付き、HLSL 側で <code>AppendStructuredBuffer</code> として使えます。何個書き込まれるか事前に分からない出力 (マーチングキューブ法の三角形がまさにそれです) を、各スレッドが「末尾に追加」する形で書けます。</p>
+
+<div class="warn">同じリソースを SRV と UAV で同時にシェーダーに束縛することはできません (GPU が読み書きの順序を保証できないため)。束縛しようとするとランタイムが古い方を勝手に外し、デバッグレイヤーが警告します。本プログラムでは各 Dispatch の後に必ず <code>UnbindCompute()</code> で全スロットを空にする規約でこれを避けています。</div>
+
+<h3>定数バッファ</h3>
+<p>すべてのスレッドが共通に参照する少量のパラメータ (時間刻み、粒子数、行列など) は <span class="keyterm">定数バッファ</span> で渡します。C++ の構造体をそのままコピーするだけですが、HLSL 側のメモリ配置規則 (<strong>16 バイト境界のパッキング</strong>) に合わせる必要があります。</p>
+<ul>
+  <li>変数は 16 バイト (float 4 個分) の「レジスタ」に詰められ、1 つの変数がレジスタをまたぐ場合は次のレジスタの先頭に送られる。</li>
+  <li>したがって <code>float3</code> の後に <code>float</code> を置くと 1 レジスタに収まるが、<code>float</code> の後に <code>float3</code> を置くと隙間ができる。</li>
+</ul>
+<p>本プログラムでは C++ 側の構造体を「<code>float3</code> + <code>float</code>」の組で並べ、HLSL の <code>cbuffer</code> と同じ順序にすることで、隙間なく一致させています。C++ の <code>alignas(16)</code> は構造体全体の先頭を揃えるためのものです。</p>
+
+<div class="cols2">
+<div>
+{{range:src/SPHSimulator.h|struct alignas(16) SimParams|};}}
+</div>
+<div>
+{{range:shaders/sph_common.hlsli|cbuffer SimParams : register(b0)|};}}
+</div>
+</div>
+
+<div class="warn">両者は手で一致させています。片方にメンバを追加したら必ずもう片方も同じ位置に追加してください。ずれると値が静かに間違ったまま動き、極めて発見しにくいバグになります。</div>
+
+<h2>2.4 シェーダーとコンパイル</h2>
+<p>シェーダーは HLSL (High Level Shading Language) という C 風の言語で書き、実行時に <code>D3DCompileFromFile</code> でコンパイルします。1 つの <code>.hlsl</code> ファイルに複数のエントリポイント (関数) を書いておき、エントリ名を指定して別々のシェーダーオブジェクトを作れます。本プログラムの <code>sph.hlsl</code> は 7 つの、<code>mc.hlsl</code> は 4 つのコンピュートシェーダーを 1 ファイルに持っています。</p>
+
+{{fn:src/D3DUtil.cpp:D3DContext::CompileShader}}
+
+<p>コンパイルエラーはメッセージ付きで例外にしています。シェーダーのエラーメッセージはファイル名と行番号を含むので、C++ のコンパイルエラーと同じ感覚で直せます。</p>
+
+<h2>2.5 コンピュートシェーダー ― GPU を計算機として使う</h2>
+<p>従来の GPU は「頂点を変換して三角形を塗る」ための固定された流れ (グラフィックスパイプライン) しか持ちませんでした。<span class="keyterm">コンピュートシェーダー</span> はその流れから独立して、任意の計算を並列に走らせる仕組みです。SPH もマーチングキューブ法もここで実行します。</p>
+
+<h3>スレッドとグループ</h3>
+<p>コンピュートシェーダーは 3 段階の階層で並列度を指定します。</p>
+<ul>
+  <li><strong>スレッド</strong>: シェーダー関数を 1 回実行する単位。<code>SV_DispatchThreadID</code> で自分の通し番号を知る。</li>
+  <li><strong>グループ</strong>: 一緒にスケジュールされるスレッドの束。HLSL 側で <code>[numthreads(256,1,1)]</code> のように固定する。同じグループのスレッドは <code>groupshared</code> メモリを共有し、<code>GroupMemoryBarrierWithGroupSync()</code> で同期できる。</li>
+  <li><strong>Dispatch</strong>: C++ 側で「グループをいくつ起動するか」を指定する。</li>
+</ul>
+<p>粒子が N 個あるとき、1 グループ 256 スレッドなら <code>Dispatch(ceil(N/256), 1, 1)</code> です。最後のグループには余りのスレッドが出るので、シェーダーの冒頭で <code>if (i &gt;= numParticles) return;</code> と範囲チェックをします。</p>
+
+{{fn:shaders/sph.hlsl:CS_Count}}
+
+<p>上の例は「各粒子がどのセルに属するかを数える」シェーダーです。<code>InterlockedAdd</code> は <span class="keyterm">アトミック演算</span> で、複数のスレッドが同時に同じカウンタに加算しても正しく数えられることを保証し、しかも「加算前の値」を返してくれます。この返り値がそのまま「セル内で何番目の粒子か」という順序番号になる ― これはカウンティングソートの核心で、第 4 章で活躍します。</p>
+
+<h3>C++ 側からの実行</h3>
+<p>C++ 側では、シェーダー・定数バッファ・入出力ビューをそれぞれのスロットに束縛してから <code>Dispatch</code> を呼びます。以下は SPH の格子構築 (第 4 章) の C++ 側です。1 つ 1 つの <code>setSRV</code> / <code>setUAV</code> が HLSL の <code>register(t#)</code> / <code>register(u#)</code> に対応しています。</p>
+
+{{fn:src/SPHSimulator.cpp:SPHSimulator::SortParticles}}
+
+<h2>2.6 グラフィックスパイプラインの最小限</h2>
+<p>描画 (第 6 章) では従来のパイプラインも使います。本書に必要な範囲だけまとめます。</p>
+<table>
+  <tr><th>段階</th><th>役割</th><th>本プログラムでの例</th></tr>
+  <tr><td>入力アセンブラ (IA)</td><td>頂点バッファから頂点を取り出す</td><td>床・ガラスは頂点バッファ、水面は <code>SV_VertexID</code> から自前で取り出す</td></tr>
+  <tr><td>頂点シェーダー (VS)</td><td>頂点をクリップ座標へ変換</td><td><code>mul(float4(p,1), viewProj)</code></td></tr>
+  <tr><td>ラスタライザ (RS)</td><td>三角形をピクセルに分解、裏面カリング</td><td>水面は裏面カリング、影は両面</td></tr>
+  <tr><td>ピクセルシェーダー (PS)</td><td>ピクセルの色を計算</td><td>フレネル反射・屈折・吸収</td></tr>
+  <tr><td>出力マージャ (OM)</td><td>深度テスト、ブレンド、RTV へ書き込み</td><td>ガラスは乗算済みアルファでブレンド</td></tr>
+</table>
+
+<figure class="diagram"><img src="figures/coords.svg" alt="座標変換"><figcaption>図: 頂点座標の変換の流れ。</figcaption></figure>
+
+<h3>頂点バッファを使わない描画</h3>
+<p>マーチングキューブ法が出力する三角形は構造化バッファに入っています。これを頂点バッファにコピーし直すのは無駄なので、頂点シェーダーが <code>SV_VertexID</code> (頂点の通し番号) を受け取って構造化バッファから直接読み出します。頂点数は GPU 上のカウンタから <code>DrawInstancedIndirect</code> に渡すので、CPU は三角形数を知る必要すらありません。</p>
+
+{{range:shaders/water.hlsl|// 頂点 ID から三角形バッファの頂点を取り出す|return o;}}
+
+<div class="note">DirectX 11 では構造化バッファの要素をまたいで「頂点 k の位置は要素 k/3 の v0/v1/v2 のどれか」という取り出し方をします。<code>MCTriangle</code> を丸ごと読んで 3 分岐する書き方は、動的インデックスよりも確実にコンパイルされます。</div>
+
+<h2>2.7 本プログラムで使う DirectX 11 機能の一覧</h2>
+<table>
+  <tr><th>機能</th><th>使用箇所</th></tr>
+  <tr><td>コンピュートシェーダー (cs_5_0)、<code>Dispatch</code></td><td>SPH 全パス、スカラー場、マーチングキューブ</td></tr>
+  <tr><td>StructuredBuffer / RWStructuredBuffer</td><td>粒子データ、格子、スカラー場</td></tr>
+  <tr><td>AppendStructuredBuffer + <code>CopyStructureCount</code></td><td>三角形の出力とその個数</td></tr>
+  <tr><td>RWByteAddressBuffer + <code>DrawInstancedIndirect</code></td><td>GPU で作った頂点数で描画</td></tr>
+  <tr><td>InterlockedAdd (アトミック)、groupshared メモリ、バリア</td><td>セルのカウント、並列累積和</td></tr>
+  <tr><td>深度テクスチャの SRV 読み出し (TYPELESS フォーマット)</td><td>屈折の厚み推定、シャドウマップ</td></tr>
+  <tr><td>比較サンプラ (<code>SampleCmpLevelZero</code>)</td><td>シャドウマップの PCF</td></tr>
+  <tr><td>HDR レンダーターゲット (R16G16B16A16_FLOAT)、ブレンドステート</td><td>水面・ガラス・ポストプロセス</td></tr>
+</table>
+
+<h2>実験してみよう</h2>
+<ul>
+  <li><code>--debug</code> オプションでデバッグレイヤーを有効にし、<code>SPHSimulator::Step()</code> のどれか 1 つの <code>UnbindCompute()</code> をコメントアウトして実行してみましょう。Visual Studio の出力ウィンドウ (または DebugView) に、SRV/UAV の競合警告が出ることを確認できます。</li>
+  <li><code>THREADS</code> (sph.hlsl) と <code>Groups()</code> (SPHSimulator.cpp) を 256 から 64 に変えると速度はどう変わるでしょうか。GPU のアーキテクチャによって最適なグループサイズは異なります。</li>
+</ul>

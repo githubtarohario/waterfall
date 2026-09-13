@@ -8,6 +8,8 @@ GPU 上の **SPH 法 (WCSPH)** と **マーチングキューブ法** で再現�
 E:\work\水しぶき
 ├─ build.bat            MSVC ビルドスクリプト (build\SPHSplash.exe を生成)
 ├─ CMakeLists.txt       CMake でビルドする場合
+├─ docs\               API 仕様書 (Markdown / HTML / PDF)
+├─ book\               解説書『GPU で作る水しぶき』(CG解説書.pdf) とその生成スクリプト
 ├─ src\
 │   ├─ main.cpp          Win32 ウィンドウ / メインループ / 入力 / フレーム録画
 │   ├─ SimConfig.h       全パラメータ (シーン配置・SPH 定数・カメラ・ライト)
@@ -47,6 +49,7 @@ build\SPHSplash.exe --record            capture\frame_XXXX.bmp に 24fps 相当�
 build\SPHSplash.exe --record out --frames 102   102 フレーム (4.25 秒) 保存して終了
 build\SPHSplash.exe --spacing 0.011     粒子間隔を細かくして高精細に (粒子数 ≒ 2 倍)
 build\SPHSplash.exe --particles         粒子を点で表示するデバッグモード
+build\SPHSplash.exe --particles --nowater   粒子だけを表示 (水面メッシュを描かない)
 build\SPHSplash.exe --resttest          水塊を床に静置する安定性テスト
 ```
 
@@ -91,3 +94,10 @@ build\SPHSplash.exe --resttest          水塊を床に静置する安定性テ�
 ### 描画 (src/Renderer.cpp)
 シャドウマップ → 床 → (色・深度のコピー) → 水の裏面深度 → 水面 (フレネル反射 + スクリーン空間屈折 +
 厚みによる吸収 + ハイライト) → ガラス水槽 → 2×SSAA 縮小・トーンマップ・周辺減光。
+
+## 解説書
+
+`book/CG解説書.pdf` (約 110 ページ) に、SPH 法・マーチングキューブ法・水のレンダリングの理論と
+本プログラムのコードを対応付けて解説した教科書があります。
+`python book/build_book.py` で章 (`book/chapters/*.html`) からソースコードを自動抽出して HTML と PDF を再生成できます
+(ヘッドレス Chrome を使用)。

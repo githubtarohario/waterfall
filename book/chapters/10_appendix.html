@@ -1,0 +1,156 @@
+<h1><span class="chap">付録 A</span>パラメータ一覧と数式のまとめ</h1>
+
+<h2>A.1 主要パラメータ (SimConfig.h)</h2>
+<table>
+  <tr><th>定数</th><th>既定値</th><th>単位</th><th>意味・効き方</th></tr>
+  <tr><td><code>DEFAULT_SPACING</code></td><td class="num">0.014</td><td>m</td><td>粒子間隔 d。粒子数 ∝ 1/d³、計算時間 ∝ 1/d⁴</td></tr>
+  <tr><td><code>H_PER_SPACING</code></td><td class="num">2.0</td><td>–</td><td>平滑化長 h = 2d。近傍粒子数 ≒ 33</td></tr>
+  <tr><td><code>REST_DENSITY</code></td><td class="num">1000</td><td>kg/m³</td><td>基準密度 ρ0</td></tr>
+  <tr><td><code>SOUND_SPEED</code></td><td class="num">12</td><td>m/s</td><td>数値音速 c。大きいほど硬く、dt が小さくなる</td></tr>
+  <tr><td><code>TAIT_GAMMA</code></td><td class="num">7</td><td>–</td><td>状態方程式の指数</td></tr>
+  <tr><td><code>VISCOSITY_MU</code></td><td class="num">0.5</td><td>Pa·s</td><td>ラプラシアン型粘性。減衰率 ≒ 22μ /s</td></tr>
+  <tr><td><code>ARTIFICIAL_VISC_ALPHA</code></td><td class="num">0.08</td><td>–</td><td>Monaghan 人工粘性。衝撃時の飛散を抑える</td></tr>
+  <tr><td><code>COHESION_KAPPA</code></td><td class="num">0</td><td>–</td><td>凝集力 (0 = 無効)</td></tr>
+  <tr><td><code>XSPH_EPS</code></td><td class="num">0.15</td><td>–</td><td>XSPH 速度平滑化</td></tr>
+  <tr><td><code>SCENE_SCALE</code></td><td class="num">2.0</td><td>–</td><td>実寸 / モデル寸法。重力を 1/SCENE_SCALE に</td></tr>
+  <tr><td><code>CFL</code></td><td class="num">0.4</td><td>–</td><td>dt = CFL·h/c</td></tr>
+  <tr><td><code>WALL_RESTITUTION</code></td><td class="num">0.05</td><td>–</td><td>壁衝突の反発係数</td></tr>
+  <tr><td><code>WALL_FRICTION</code></td><td class="num">0.999</td><td>/サブステップ</td><td>壁接触中の接線速度の減衰</td></tr>
+  <tr><td><code>BOUNDARY_DENSITY_SCALE</code></td><td class="num">1.0</td><td>–</td><td>ゴースト密度の強さ</td></tr>
+  <tr><td><code>MAX_SPEED_PER_H</code></td><td class="num">0.5</td><td>–</td><td>速度上限 = 0.5 h / dt</td></tr>
+  <tr><td><code>TANK_INNER_HALF</code></td><td class="num">0.5</td><td>m</td><td>水槽内側の半幅 (内寸 1 m 角)</td></tr>
+  <tr><td><code>TANK_HEIGHT</code></td><td class="num">1.6</td><td>m</td><td>衝突用の壁の高さ</td></tr>
+  <tr><td><code>GLASS_VISIBLE_HEIGHT</code></td><td class="num">0.3</td><td>m</td><td>描画するガラスの高さ</td></tr>
+  <tr><td><code>MC_CELL_PER_SPACING</code></td><td class="num">0.75</td><td>–</td><td>MC 格子間隔 / d</td></tr>
+  <tr><td><code>MC_FIELD_RADIUS_PER_SPACING</code></td><td class="num">2.0</td><td>–</td><td>スカラー場カーネル半径 R / d (≤ h/d)</td></tr>
+  <tr><td><code>MC_ISO_LEVEL</code></td><td class="num">0.5</td><td>–</td><td>等値レベル</td></tr>
+  <tr><td><code>MC_SMOOTH_PASSES</code></td><td class="num">2</td><td>回</td><td>スカラー場の平滑化回数</td></tr>
+  <tr><td><code>CAM_YAW_DEG / CAM_PITCH_DEG</code></td><td class="num">−45 / 30</td><td>°</td><td>カメラの向き</td></tr>
+  <tr><td><code>CAM_DISTANCE / CAM_FOV_DEG</code></td><td class="num">3.2 / 40</td><td>m / °</td><td>距離と垂直画角</td></tr>
+  <tr><td><code>LIGHT_DIR</code></td><td class="num">(0.15, 1, −0.9)</td><td>–</td><td>光源へ向かうベクトル</td></tr>
+</table>
+
+<h2>A.2 数式のまとめ</h2>
+<table>
+  <tr><th>項目</th><th>式</th><th>実装箇所</th></tr>
+  <tr><td>密度</td><td>\(\rho_i = \sum_j m W_{\text{poly6}}(r_{ij}) + \rho_{\text{wall}}\)</td><td><code>CS_Density</code></td></tr>
+  <tr><td>Tait 圧力</td><td>\(p = \max\!\big(0,\ B[(\rho/\rho_0)^7 - 1]\big),\ B = \rho_0 c^2/7\)</td><td><code>CS_Density</code></td></tr>
+  <tr><td>圧力加速度</td><td>\(-\sum_j m (p_i/\rho_i^2 + p_j/\rho_j^2)\nabla W_{\text{spiky}}\)</td><td><code>CS_Force</code></td></tr>
+  <tr><td>粘性加速度</td><td>\(\frac{\mu}{\rho_i}\sum_j m \frac{\mathbf v_j - \mathbf v_i}{\rho_j}\nabla^2 W_{\text{visc}}\)</td><td><code>CS_Force</code></td></tr>
+  <tr><td>人工粘性</td><td>\(\Pi_{ij} = -\alpha c h \frac{\mathbf v_{ij}\cdot\mathbf r_{ij}}{(r_{ij}^2 + 0.01h^2)\bar\rho_{ij}}\) (接近時のみ)</td><td><code>CS_Force</code></td></tr>
+  <tr><td>XSPH</td><td>\(\hat{\mathbf v}_i = \mathbf v_i + \epsilon\sum_j \frac{m}{\rho_j}(\mathbf v_j - \mathbf v_i) W_{\text{poly6}}\)</td><td><code>CS_Force</code>, <code>CS_Integrate</code></td></tr>
+  <tr><td>時間積分</td><td>\(\mathbf v \mathrel{+}= \mathbf a\,\Delta t,\quad \mathbf x \mathrel{+}= \hat{\mathbf v}\,\Delta t\)</td><td><code>CS_Integrate</code></td></tr>
+  <tr><td>CFL</td><td>\(\Delta t = 0.4\,h/c\)</td><td><code>SPHSimulator::Initialize</code></td></tr>
+  <tr><td>ゴースト密度</td><td>\(\rho_{\text{wall}} = \tfrac{1}{2}\rho_0(1 - d/h)^2\)</td><td><code>BoundaryDensity</code></td></tr>
+  <tr><td>スカラー場</td><td>\(F(\mathbf x) = \sum_j (1 - r_j^2/R^2)^3\)</td><td><code>CS_Field</code></td></tr>
+  <tr><td>MC 交点</td><td>\(t = (c - F_a)/(F_b - F_a)\)</td><td><code>CS_MarchingCubes</code></td></tr>
+  <tr><td>フレネル</td><td>\(F = 0.02 + 0.98(1 - \cos\theta)^5\)</td><td><code>PS_Water</code></td></tr>
+  <tr><td>吸収</td><td>\(T = \exp(-\sigma t)\)</td><td><code>PS_Water</code></td></tr>
+  <tr><td>ハイライト</td><td>\((\mathbf n\cdot\mathbf h)^{220}\)</td><td><code>PS_Water</code></td></tr>
+  <tr><td>フルード相似</td><td>\(g_{\text{model}} = g / \text{SCENE\_SCALE}\)</td><td><code>SimConfig.h</code></td></tr>
+</table>
+
+<h2>A.3 用語集</h2>
+<table>
+  <tr><th>用語</th><th>説明</th></tr>
+  <tr><td>SPH</td><td>Smoothed Particle Hydrodynamics。流体を粒子で表し、カーネルで物理量を補間する粒子法</td></tr>
+  <tr><td>WCSPH</td><td>Weakly Compressible SPH。状態方程式で圧力を決める、わずかな圧縮を許す SPH</td></tr>
+  <tr><td>カーネル</td><td>距離に応じた重み関数。平滑化長 h より遠いと 0</td></tr>
+  <tr><td>平滑化長 h</td><td>カーネルの半径。本プログラムでは粒子間隔の 2 倍</td></tr>
+  <tr><td>Tait 状態方程式</td><td>密度から圧力を求める式 \(p = B[(\rho/\rho_0)^\gamma - 1]\)</td></tr>
+  <tr><td>CFL 条件</td><td>時間刻みの上限。情報が 1 ステップで格子 (粒子) 間隔を超えて伝わってはいけない</td></tr>
+  <tr><td>人工粘性</td><td>接近する粒子対にだけ働く数値的な抵抗。衝撃を吸収する</td></tr>
+  <tr><td>XSPH</td><td>粒子を動かす速度を周囲の平均に寄せる補正</td></tr>
+  <tr><td>カウンティングソート</td><td>整数キーの出現数を数えて位置を決めるソート。比較を行わない</td></tr>
+  <tr><td>スキャン (累積和)</td><td>配列の先頭からの和。GPU では log n 段の並列処理で計算できる</td></tr>
+  <tr><td>ピンポンバッファ</td><td>読み出し用と書き込み用の 2 組を交互に入れ替えて使うバッファ</td></tr>
+  <tr><td>等値面</td><td>スカラー場の値が一定になる面</td></tr>
+  <tr><td>マーチングキューブ法</td><td>格子セルごとに 256 通りの内外パターンから等値面の三角形を生成する手法</td></tr>
+  <tr><td>多様体 (閉じた)</td><td>すべての辺がちょうど 2 つの三角形に共有される、穴の無いメッシュ</td></tr>
+  <tr><td>SRV / UAV / RTV / DSV</td><td>DirectX 11 のリソースビュー。読み取り / 読み書き / 描画先 / 深度</td></tr>
+  <tr><td>コンピュートシェーダー</td><td>描画パイプラインと独立して任意の計算を GPU で行うシェーダー</td></tr>
+  <tr><td>Dispatch</td><td>コンピュートシェーダーのスレッドグループを起動する命令</td></tr>
+  <tr><td>AppendStructuredBuffer</td><td>カウンタ付きで末尾に要素を追加できるバッファ</td></tr>
+  <tr><td>DrawInstancedIndirect</td><td>描画する頂点数を GPU 上のバッファから読む描画命令</td></tr>
+  <tr><td>シャドウマップ</td><td>光源から見た深度画像。影の判定に使う</td></tr>
+  <tr><td>PCF</td><td>Percentage Closer Filtering。複数点で影を判定して平均し、柔らかい影を作る</td></tr>
+  <tr><td>フレネル反射</td><td>視線の角度で反射率が変わる現象。Schlick 近似で計算</td></tr>
+  <tr><td>Beer–Lambert 則</td><td>媒質を通る光が距離に対して指数的に減衰する法則</td></tr>
+  <tr><td>乗算済みアルファ</td><td>色にあらかじめ不透明度を掛けておくブレンド方式。加算光と遮蔽を分けて扱える</td></tr>
+  <tr><td>SSAA</td><td>Super-Sampling Anti-Aliasing。高解像度で描いて縮小する</td></tr>
+  <tr><td>トーンマップ</td><td>HDR の輝度を表示可能な範囲に圧縮する処理</td></tr>
+  <tr><td>フルード相似</td><td>重力が支配する流れで、\(v/\sqrt{gL}\) が等しければ流れが相似になる法則</td></tr>
+</table>
+
+<h1><span class="chap">付録 B</span>ソースコード全文</h1>
+<p>本書執筆時点のソースコードをすべて掲載します (行番号付き)。最新版はリポジトリ <code>github.com/githubtarohario/waterfall</code> を参照してください。</p>
+
+<h2>B.1 src/SimConfig.h</h2>
+<p>第 1 章に全文を掲載しました。</p>
+
+<h2>B.2 src/main.cpp</h2>
+{{file:src/main.cpp}}
+
+<h2>B.3 src/D3DUtil.h</h2>
+{{file:src/D3DUtil.h}}
+
+<h2>B.4 src/D3DUtil.cpp</h2>
+{{file:src/D3DUtil.cpp}}
+
+<h2>B.5 src/SPHSimulator.h</h2>
+{{file:src/SPHSimulator.h}}
+
+<h2>B.6 src/SPHSimulator.cpp</h2>
+{{file:src/SPHSimulator.cpp}}
+
+<h2>B.7 src/MarchingCubes.h</h2>
+{{file:src/MarchingCubes.h}}
+
+<h2>B.8 src/MarchingCubes.cpp</h2>
+{{file:src/MarchingCubes.cpp}}
+
+<h2>B.9 src/MCTables.h</h2>
+{{file:src/MCTables.h}}
+
+<h2>B.10 src/MCTables.cpp</h2>
+{{file:src/MCTables.cpp}}
+
+<h2>B.11 src/Renderer.h</h2>
+{{file:src/Renderer.h}}
+
+<h2>B.12 src/Renderer.cpp</h2>
+{{file:src/Renderer.cpp}}
+
+<h2>B.13 src/mc_selftest.cpp</h2>
+{{file:src/mc_selftest.cpp}}
+
+<h2>B.14 shaders/sph_common.hlsli</h2>
+{{file:shaders/sph_common.hlsli}}
+
+<h2>B.15 shaders/sph.hlsl</h2>
+{{file:shaders/sph.hlsl}}
+
+<h2>B.16 shaders/mc.hlsl</h2>
+{{file:shaders/mc.hlsl}}
+
+<h2>B.17 shaders/render_common.hlsli</h2>
+{{file:shaders/render_common.hlsli}}
+
+<h2>B.18 shaders/water.hlsl</h2>
+{{file:shaders/water.hlsl}}
+
+<h2>B.19 shaders/scene.hlsl</h2>
+{{file:shaders/scene.hlsl}}
+
+<h2>B.20 shaders/post.hlsl</h2>
+{{file:shaders/post.hlsl}}
+
+<h2>B.21 build.bat</h2>
+{{file:build.bat}}
+
+<div class="colophon">
+<p><strong>GPU で作る水しぶき ― SPH 法とマーチングキューブ法で学ぶリアルタイム流体 CG</strong><br>
+第 1 版 2026 年 9 月<br>
+題材プログラム: waterfall (DirectX 11 / C++17 / HLSL 5.0)<br>
+本書の図版はすべて題材プログラムの出力、および Python (matplotlib / OpenCV) による生成です。</p>
+</div>

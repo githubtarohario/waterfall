@@ -1,0 +1,149 @@
+<h1><span class="chap">第 3 章</span>SPH 法の理論 ― 粒子で流体を表す</h1>
+
+<p class="lead">SPH (Smoothed Particle Hydrodynamics) は、流体を「動き回る粒子の集まり」として表し、各粒子の周囲の粒子から物理量を滑らかに補間する手法です。もともと天体物理学 (1977 年、Lucy / Gingold &amp; Monaghan) で生まれ、CG には Müller らの 2003 年の論文で持ち込まれました。本章では、流体力学の基礎方程式から出発して、本プログラムのシェーダーに書かれている式が一つずつどこから来るのかを導きます。</p>
+
+<h2>3.1 流体を支配する方程式</h2>
+<p>水の運動は <span class="keyterm">ナビエ・ストークス方程式</span> で記述されます。粒子とともに動く視点 (ラグランジュ的視点) で書くと、粒子の速度 \(\mathbf{v}\) の時間変化は</p>
+<div class="eq">\[ \rho \frac{D\mathbf{v}}{Dt} = -\nabla p + \mu \nabla^2 \mathbf{v} + \rho \mathbf{g} \]</div>
+<p>です。右辺は順に <strong>圧力の勾配</strong> (圧力が高い側から低い側へ押される力)、<strong>粘性</strong> (周囲との速度差をならす力)、<strong>重力</strong> です。\(\rho\) は密度、\(\mu\) は粘性係数です。SPH の主な仕事は、この右辺を「近くの粒子の値の重み付き和」で計算することに尽きます。</p>
+<p>もう一つ、質量保存 (連続の式) があります。粒子法では各粒子が固定の質量 \(m\) を持って動くので、質量保存は自動的に満たされます。その代わり、密度は「粒子がどれだけ密集しているか」から計算する必要があります。</p>
+
+<h2>3.2 カーネルによる補間</h2>
+<p>SPH の基本アイデアは、任意の場所 \(\mathbf{x}\) における物理量 \(A\) を、周囲の粒子 \(j\) の値 \(A_j\) を重み \(W\) で平均して求めることです。</p>
+<div class="eq">\[ A(\mathbf{x}) = \sum_j m_j \frac{A_j}{\rho_j} W(\mathbf{x} - \mathbf{x}_j, h) \]</div>
+<p>\(m_j / \rho_j\) は粒子 \(j\) の体積です。つまりこれは「体積で重み付けした平均」で、\(W\) は距離が近いほど大きく、<span class="keyterm">平滑化長</span> \(h\) より遠いと 0 になる関数 (<span class="keyterm">カーネル</span>) です。\(W\) は全空間で積分すると 1 になるよう正規化されます。</p>
+<p>この式の便利なところは、微分が <strong>カーネルの微分</strong> に移せることです。\(A_j\) は粒子に張り付いた定数なので、</p>
+<div class="eq">\[ \nabla A(\mathbf{x}) = \sum_j m_j \frac{A_j}{\rho_j} \nabla W(\mathbf{x} - \mathbf{x}_j, h), \qquad \nabla^2 A(\mathbf{x}) = \sum_j m_j \frac{A_j}{\rho_j} \nabla^2 W(\mathbf{x} - \mathbf{x}_j, h) \]</div>
+<p>となり、勾配やラプラシアンが「あらかじめ解析的に微分しておいたカーネル」の和で求まります。格子も差分も要りません。これが SPH が「メッシュフリー」と呼ばれる理由です。</p>
+
+<h3>3 つのカーネル</h3>
+<p>Müller らは、密度・圧力・粘性の計算にそれぞれ性質の良いカーネルを使い分けることを提案しました。本プログラムもそれに従っています。\(r = |\mathbf{x} - \mathbf{x}_j|\), \(r &lt; h\) のとき</p>
+<div class="eq">\[ W_{\text{poly6}}(r) = \frac{315}{64\pi h^9}(h^2 - r^2)^3 \]</div>
+<div class="eq">\[ \nabla W_{\text{spiky}}(r) = -\frac{45}{\pi h^6}(h - r)^2\,\hat{\mathbf{r}} \]</div>
+<div class="eq">\[ \nabla^2 W_{\text{visc}}(r) = \frac{45}{\pi h^6}(h - r) \]</div>
+
+{{fig:kernels.png:3 つのカーネルの形 (h = 1)。poly6 は滑らかで密度に向くが、中心付近で勾配が 0 になるため圧力には使えない。spiky の勾配は中心まで単調で粒子同士の反発を正しく生む。viscosity のラプラシアンは常に正で、速度差を必ず「ならす」方向に働く。}}
+
+<ul>
+  <li><strong>poly6</strong> は \(r^2\) だけで計算でき (平方根が不要)、滑らかなので密度に使います。ただし中心付近で勾配がゼロになるため、これを圧力に使うと近づきすぎた粒子が反発せず固まってしまいます。</li>
+  <li><strong>spiky</strong> は中心に向かって勾配が単調に強くなるので、圧力 (反発力) に使います。</li>
+  <li><strong>viscosity</strong> はラプラシアンが常に正になるように設計されたカーネルで、粘性が必ずエネルギーを減らす方向に働くことを保証します。</li>
+</ul>
+<p>本プログラムでは正規化定数 \(315/(64\pi h^9)\) などを C++ 側で一度だけ計算し、定数バッファの <code>poly6</code>, <code>spikyGrad</code>, <code>viscLap</code> としてシェーダーに渡しています (<code>SPHSimulator::Initialize</code>)。</p>
+
+<h2>3.3 密度</h2>
+<p>補間式に \(A = \rho\) を代入すると \(m_j/\rho_j\) と \(\rho_j\) が打ち消し合い、密度は単純に</p>
+<div class="eq">\[ \rho_i = \sum_j m_j W_{\text{poly6}}(|\mathbf{x}_i - \mathbf{x}_j|) \]</div>
+<p>です。自分自身 (\(j = i\)) も和に含めます。「近くに粒子が多いほど密度が高い」という直感そのものです。</p>
+
+<h3>粒子の質量をどう決めるか</h3>
+<p>粒子は間隔 \(d\) の格子に並べて初期化します。このとき内部の粒子の密度が基準密度 \(\rho_0 = 1000\ \mathrm{kg/m^3}\) にぴったりなるように質量を決めれば、静止した水塊が「最初から平衡状態」になり、初期化直後に不自然な膨張・収縮が起きません。格子上の 1 点について \(\sum_j W\) を実際に足し合わせ、\(m = \rho_0 / \sum_j W\) とします。</p>
+
+{{range:src/SPHSimulator.cpp|// 粒子質量: 格子上に静止した内部粒子の密度が ρ0 になるよう決める|p.mass = (float)(cfg::REST_DENSITY / sumW);}}
+
+<div class="note">単純に \(m = \rho_0 d^3\) としても近い値になりますが (\(d = 0.014\) で \(2.74 \times 10^{-3}\) kg、上の方法では \(2.72 \times 10^{-3}\) kg)、カーネルの離散和は積分と完全には一致しないため、数 % のずれが初期の「呼吸」として現れます。</div>
+
+<h2>3.4 圧力 ― 弱圧縮性という近似</h2>
+<p>水はほとんど圧縮しません。厳密に非圧縮を課すと、圧力を求めるために大規模な連立方程式 (ポアソン方程式) を解く必要があり、実装が複雑になります。代わりに「わずかに圧縮を許し、密度が上がったら強い圧力で押し返す」という <span class="keyterm">弱圧縮性 SPH (WCSPH)</span> を採用します。密度から圧力を直接計算する式を <span class="keyterm">状態方程式</span> と呼び、本プログラムでは <span class="keyterm">Tait の式</span> を使います。</p>
+<div class="eq">\[ p = B\left[\left(\frac{\rho}{\rho_0}\right)^{\gamma} - 1\right], \qquad B = \frac{\rho_0 c^2}{\gamma}, \quad \gamma = 7 \]</div>
+<p>\(c\) は「数値的な音速」です。本物の水の音速 (1500 m/s) を使うと圧力が硬すぎて時間刻みを極端に小さくしなければならないので、流れの最大速度の数倍程度 (本プログラムでは 12 m/s) に下げます。密度変動は概ね \((v/c)^2\) の程度に収まるので、最大流速 3 m/s なら数 % です。</p>
+
+{{fig:tait.png:Tait 状態方程式。密度が 1 % 上がるだけで 20 kPa 近い圧力が生じ、粒子を押し戻す。負圧 (密度が基準より低い) の領域は 0 にクランプする。}}
+
+<h3>負圧をクランプする理由</h3>
+<p>自由表面 (水と空気の境界) 付近の粒子は片側に隣人がいないため、密度が \(\rho_0\) を下回ります。Tait の式をそのまま使うと負の圧力、すなわち粒子同士を <strong>引き寄せる</strong> 力が生まれ、表面の粒子が塊になって固まる「引張不安定性」が起きます。実際の水の表面張力とは異なる数値的な現象なので、本プログラムでは \(p = \max(0, \cdot)\) として負圧を捨てています。</p>
+
+{{fn:shaders/sph.hlsl:CS_Density}}
+
+<p>コードの <code>r7</code> は \((\rho/\rho_0)^7\) を掛け算 4 回で計算しています (<code>pow</code> より速い)。<code>BoundaryDensity</code> は次節の境界処理です。</p>
+
+<h2>3.5 圧力による加速度</h2>
+<p>圧力勾配の項 \(-\nabla p / \rho\) を補間式で書くと</p>
+<div class="eq">\[ \mathbf{a}_i^{\text{press}} = -\sum_j m_j \left(\frac{p_i}{\rho_i^2} + \frac{p_j}{\rho_j^2}\right) \nabla W_{\text{spiky}}(\mathbf{x}_i - \mathbf{x}_j) \]</div>
+<p>となります。単純に \(\nabla p\) を補間した式 \(\sum_j m_j (p_j/\rho_j)\nabla W\) ではなく、\(p_i\) と \(p_j\) を対称に含む形にしてあります。この <span class="keyterm">対称形</span> (Monaghan の形) にすると、粒子 \(i\) が \(j\) に及ぼす力と \(j\) が \(i\) に及ぼす力が大きさ等しく逆向きになり (作用・反作用)、運動量が保存されます。非対称な形では粒子対の間で運動量が湧き出し、シミュレーション全体が勝手に加速する不具合が起きます。</p>
+<p>\(\nabla W_{\text{spiky}}\) の向きは \(\hat{\mathbf{r}} = (\mathbf{x}_i - \mathbf{x}_j)/r\) の逆、つまり粒子 \(i\) から \(j\) へ向かいます (距離が縮む方向がカーネルの増える方向)。先頭のマイナスと合わせて、加速度は \(j\) から離れる向き ― 反発 ― になります。コードでは <code>spikyGrad</code> が負の定数として渡され、<code>aPress -= mass * (...) * gradW</code> で同じことをしています。</p>
+
+<h2>3.6 粘性</h2>
+<p>粘性項 \(\mu \nabla^2 \mathbf{v} / \rho\) は速度のラプラシアンです。ラプラシアンは「周囲の平均との差」を表す演算子なので、粘性は各粒子の速度を周囲の平均速度に近づける働きをします。</p>
+<div class="eq">\[ \mathbf{a}_i^{\text{visc}} = \frac{\mu}{\rho_i} \sum_j m_j \frac{\mathbf{v}_j - \mathbf{v}_i}{\rho_j} \nabla^2 W_{\text{visc}}(r) \]</div>
+<p>速度の「差」をカーネルで重み付けしているので、周囲と同じ速度で動いている粒子には力が働きません。</p>
+
+<h3>粘性の大きさと安定性</h3>
+<p>本物の水の \(\mu\) は 0.001 Pa·s ですが、この項は本プログラムの粒子間隔では効果がほぼゼロです。減衰率を概算すると、\(\mu\) を 1 増やすごとに毎秒約 22 の割合でしか速度差が減りません。一方、大きくしすぎると時間刻み \(\Delta t\) との積が 1 を超えて発散します (陽的な拡散の安定条件)。既定値 0.5 は「安定に大きく振れる範囲の中で、見た目に効きすぎない値」です。</p>
+
+<h2>3.7 人工粘性 ― 衝撃を吸収する</h2>
+<p>ここで、開発中に起きた失敗を紹介します。最初のバージョンは圧力・粘性・重力だけを実装していました。水塊を床に落とすと、着水した瞬間に <strong>水が霧のように四方に爆発</strong> しました。原因は、着水時に粒子が互いに高速で接近して密度が急上昇し、Tait の式が生む巨大な圧力パルスが、減衰される前に粒子を弾き飛ばしていたことです。</p>
+<p>この「衝撃」を吸収するのが Monaghan の <span class="keyterm">人工粘性</span> です。粒子対が <strong>接近しているときだけ</strong> (\(\mathbf{v}_{ij}\cdot\mathbf{r}_{ij} &lt; 0\)) 働く抵抗を追加します。</p>
+<div class="eq">\[ \Pi_{ij} = -\frac{\alpha\, c\, h\, (\mathbf{v}_{ij}\cdot\mathbf{r}_{ij})}{(|\mathbf{r}_{ij}|^2 + 0.01 h^2)\,\bar{\rho}_{ij}}, \qquad \mathbf{a}_i^{\text{art}} = -\sum_j m_j \Pi_{ij} \nabla W_{ij} \]</div>
+<p>ここで \(\mathbf{v}_{ij} = \mathbf{v}_i - \mathbf{v}_j\)、\(\bar\rho_{ij}\) は 2 粒子の平均密度、\(\alpha\) は無次元の係数 (既定 0.08) です。接近速度に比例した「圧力の上乗せ」として働くため、衝撃波の前面で運動エネルギーを熱 (数値的な散逸) に変え、粒子が弾け飛ぶのを防ぎます。分母の \(0.01h^2\) は粒子が極端に近づいたときのゼロ割り防止です。</p>
+<div class="tip">人工粘性を入れる前後の違いは劇的でした。ダムブレイク (水柱の崩壊) でシートが四散していたものが、一枚の水の膜として床を走るようになります。WCSPH で「着水すると爆発する」現象に出会ったら、まず人工粘性を疑ってください。</div>
+
+<h2>3.8 XSPH ― 速度場の平滑化</h2>
+<p>SPH 粒子は互いにすり抜けやすく、隣り合う粒子がバラバラの速度で動くとノイズだらけの表面になります。<span class="keyterm">XSPH</span> は「粒子を動かすときの速度」を、周囲の平均速度に少し寄せる補正です。</p>
+<div class="eq">\[ \hat{\mathbf{v}}_i = \mathbf{v}_i + \epsilon \sum_j \frac{m_j}{\rho_j}(\mathbf{v}_j - \mathbf{v}_i)\,W_{\text{poly6}}(r) \]</div>
+<p>重要なのは、補正後の \(\hat{\mathbf{v}}\) は <strong>位置の更新にだけ使い</strong>、粒子が持つ速度そのものは書き換えないことです。運動量を変えずに動きだけを揃えるので、エネルギーを不自然に失いません。\(\epsilon\) は 0〜1 の係数で、既定値 0.15 です。</p>
+
+<h2>3.9 力の計算をまとめたシェーダー</h2>
+<p>ここまでの 4 つの項 (圧力・粘性・人工粘性・XSPH) は同じ近傍ループの中で一度に計算できます。以下が本プログラムの力計算シェーダーです。近傍探索の仕組み (27 セルの走査) は第 4 章で説明するので、ここではループの中身に注目してください。</p>
+
+{{fn:shaders/sph.hlsl:CS_Force}}
+
+<p>数式との対応を表にします。</p>
+<table>
+  <tr><th>数式</th><th>コード</th></tr>
+  <tr><td>\(\nabla W_{\text{spiky}} = -\frac{45}{\pi h^6}(h-r)^2 \hat{\mathbf r}\)</td><td><code>gradW = spikyGrad * t * t * (r / rl)</code></td></tr>
+  <tr><td>\(-m(p_i/\rho_i^2 + p_j/\rho_j^2)\nabla W\)</td><td><code>aPress -= mass * (pTermI + dpj.y / (rhoj*rhoj)) * gradW</code></td></tr>
+  <tr><td>\(m (\mathbf v_j - \mathbf v_i)/\rho_j \cdot \frac{45}{\pi h^6}(h-r)\)</td><td><code>aVisc += (vj - vi) * (mass / rhoj) * (viscLap * t)</code></td></tr>
+  <tr><td>\(\Pi_{ij}\), \(-m\Pi_{ij}\nabla W\)</td><td><code>piij = ...; aArt -= mass * piij * gradW</code></td></tr>
+  <tr><td>\((m/\rho_j)(\mathbf v_j - \mathbf v_i) W_{\text{poly6}}\)</td><td><code>xsph += (vj - vi) * (mass / rhoj) * (poly6 * w*w*w)</code></td></tr>
+  <tr><td>\(\mathbf a = \mathbf a^{\text{press}} + \frac{\mu}{\rho_i}\mathbf a^{\text{visc}} + \mathbf a^{\text{art}} + \mathbf g\)</td><td><code>accel = aPress + viscosity * aVisc / rhoi + aArt + cohesion * aCoh + float3(0,-gravity,0)</code></td></tr>
+</table>
+<p><code>aCoh</code> は Becker &amp; Teschner の凝集力 (簡易的な表面張力) で、既定では係数 0 で無効です。第 9 章で触れます。</p>
+
+<h2>3.10 時間積分</h2>
+<p>加速度が求まったら、速度と位置を時間 \(\Delta t\) だけ進めます。本プログラムは <span class="keyterm">シンプレクティック・オイラー法</span> (半陰的オイラー法) を使います。</p>
+<div class="eq">\[ \mathbf{v}^{n+1} = \mathbf{v}^n + \mathbf{a}^n \Delta t, \qquad \mathbf{x}^{n+1} = \mathbf{x}^n + \hat{\mathbf{v}}^{n+1} \Delta t \]</div>
+<p>「先に速度を更新し、<strong>更新後の速度</strong>で位置を進める」だけの違いですが、位置を古い速度で進める普通のオイラー法と比べてエネルギーが単調に増えにくく、振動系で格段に安定します。実装コストは同じなので、粒子シミュレーションではほぼ常にこちらを使います。</p>
+
+<h3>時間刻みの制限 (CFL 条件)</h3>
+<p>陽的な時間積分では、1 ステップで情報が伝わる距離が粒子の間隔を超えてはいけません。圧力波は音速 \(c\) で伝わるので、</p>
+<div class="eq">\[ \Delta t \le C_{\text{CFL}} \frac{h}{c}, \qquad C_{\text{CFL}} \approx 0.4 \]</div>
+<p>が必要です (<span class="keyterm">CFL 条件</span>)。本プログラムはこの上限を満たす最大の \(\Delta t\) で 1/24 秒を等分割し、サブステップ数を自動決定します。既定設定 (\(h = 0.028\), \(c = 12\)) では \(\Delta t \approx 0.93\) ms、45 サブステップです。粒子を細かくすると \(h\) が縮み、サブステップ数は増えます。</p>
+
+{{range:src/SPHSimulator.cpp|// 時間刻み: CFL 条件 dt = CFL * h / c を満たす最大の dt でフレームを等分割|p.maxSpeed = cfg::MAX_SPEED_PER_H * h / p.dt;}}
+
+<p><code>maxSpeed</code> は「1 サブステップで \(h\) の半分以上動かない」という安全装置です。何かの拍子に 1 粒子だけ異常な速度を持ったとき、それが近傍探索の前提 (1 ステップで隣のセルより遠くへ行かない) を壊して連鎖的に壊れるのを防ぎます。</p>
+
+<h2>3.11 境界の扱い</h2>
+<p>水槽の壁や床は、粒子にとって「越えられない面」です。本プログラムでは 2 種類の処理を組み合わせています。</p>
+
+<h3>位置と速度のクランプ</h3>
+<p>積分後に粒子が壁の外側に出ていたら、壁面まで押し戻し、壁に垂直な速度成分を反転 (反発係数 0.05 でほぼ止める) します。接線方向の速度には摩擦として僅かな減衰 (0.999 倍) をかけます。ガラス面は滑りやすいので摩擦はごく弱くしてあります。</p>
+
+{{fn:shaders/sph.hlsl:CS_Integrate}}
+
+<p>水槽の壁は <code>tankHeight</code> より低い位置でだけ存在し、それより上は自由です。また「積分前の位置が水槽の内側だったか」で内壁・外壁のどちらに押し戻すかを決めています。これにより、縁を越えて外に出た粒子は外側の床に落ち、内側の粒子は決して壁をすり抜けません。</p>
+
+<h3>ゴースト密度 ― 壁の向こうにいるはずの粒子</h3>
+<p>壁際の粒子は、壁の向こう側に隣人がいないぶん密度が低く見積もられます。すると圧力が生まれず、内側の粒子に押されて壁に押し付けられ、壁際だけ不自然に密になります。教科書的な対策は壁面に「境界粒子」を並べることですが、平面の壁なら <strong>失われる分を解析的に補う</strong> ことができます。壁からの距離 \(d\) が \(h\) 未満のとき、</p>
+<div class="eq">\[ \rho_{\text{wall}}(d) = \rho_0 \cdot \frac{1}{2}\left(1 - \frac{d}{h}\right)^2 \]</div>
+<p>を加えます。壁にぴったり接した粒子 (\(d = 0\)) ではカーネルの半分が壁の向こうにあるので \(\rho_0/2\)、\(d = h\) で 0 になる滑らかな近似です。</p>
+
+{{fn:shaders/sph.hlsl:BoundaryDensity}}
+
+<div class="note">この近似は平面 1 枚に対するものなので、床と壁が交わる隅では 2 回加算され、実際より少し密度が高く (圧力が強く) 出ます。隅で粒子が僅かに跳ねる原因になりますが、視覚的にはほとんど分かりません。厳密にしたければ隅の領域で重なりを引く補正を加えます。</div>
+
+<h2>3.12 まとめ ― 1 サブステップの計算</h2>
+<ol>
+  <li>各粒子について、近傍粒子との距離から密度 \(\rho_i\) を求め、Tait の式で圧力 \(p_i\) にする (負圧は 0)。</li>
+  <li>各粒子について、圧力項・粘性項・人工粘性・重力から加速度 \(\mathbf a_i\) を、XSPH から速度補正を求める。</li>
+  <li>速度を更新し、補正後の速度で位置を進め、壁・床との衝突を処理する。</li>
+</ol>
+<p>これを 1 フレームあたり 45 回繰り返します。1 回の計算で各粒子は約 30 個の近傍粒子を 2 度 (密度と力で) 訪問するので、5 万粒子なら 1 フレームで約 1.4 億回の粒子対の計算になります。これを実時間で捌くために GPU が必要であり、そのための近傍探索の工夫が次章の主題です。</p>
+
+<h2>実験してみよう</h2>
+<ul>
+  <li><code>ARTIFICIAL_VISC_ALPHA</code> を 0 にして <code>--resttest</code> (水塊を床に静置) を実行し、崩壊の様子が既定値とどう違うか比べてください。</li>
+  <li><code>SOUND_SPEED</code> を 12 から 6 に下げると、サブステップ数が半分になって速くなります。代わりに水がどう「柔らかく」なるか、着水後の水面の高さの変動に注目して観察してください。</li>
+  <li><code>XSPH_EPS</code> を 0 と 0.5 で比べると、飛沫の細かさが大きく変わります。</li>
+</ul>

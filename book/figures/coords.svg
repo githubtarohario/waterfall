@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 120" width="640" height="120" font-family="Meiryo, sans-serif" font-size="11">
+<rect x="10" y="25" width="140" height="60" rx="8" fill="#eef2f5" stroke="#7b8794"/>
+<text x="80" y="48" text-anchor="middle" font-weight="bold" fill="#1a222b">ワールド座標</text>
+<text x="80" y="68" text-anchor="middle" fill="#4c5866" font-size="10">メッシュの頂点 (m)</text>
+<line x1="150" y1="55" x2="168" y2="55" stroke="#1a222b" stroke-width="1.5"/><polygon points="168,55 162,50 162,60" fill="#1a222b"/>
+<rect x="168" y="25" width="140" height="60" rx="8" fill="#eef2f5" stroke="#7b8794"/>
+<text x="238" y="48" text-anchor="middle" font-weight="bold" fill="#1a222b">ビュー座標</text>
+<text x="238" y="68" text-anchor="middle" fill="#4c5866" font-size="10">カメラが原点 (view)</text>
+<line x1="308" y1="55" x2="326" y2="55" stroke="#1a222b" stroke-width="1.5"/><polygon points="326,55 320,50 320,60" fill="#1a222b"/>
+<rect x="326" y="25" width="140" height="60" rx="8" fill="#eef2f5" stroke="#7b8794"/>
+<text x="396" y="48" text-anchor="middle" font-weight="bold" fill="#1a222b">クリップ座標</text>
+<text x="396" y="68" text-anchor="middle" fill="#4c5866" font-size="10">射影 (proj), w で割る</text>
+<line x1="466" y1="55" x2="484" y2="55" stroke="#1a222b" stroke-width="1.5"/><polygon points="484,55 478,50 478,60" fill="#1a222b"/>
+<rect x="484" y="25" width="140" height="60" rx="8" fill="#eef2f5" stroke="#7b8794"/>
+<text x="554" y="48" text-anchor="middle" font-weight="bold" fill="#1a222b">スクリーン座標</text>
+<text x="554" y="68" text-anchor="middle" fill="#4c5866" font-size="10">ピクセル (viewport)</text>
+<text x="10" y="108" fill="#4c5866" font-size="10.5">頂点シェーダーは mul(float4(p,1), viewProj) でクリップ座標まで変換し、ラスタライザが残りを行う。</text>
+</svg>

@@ -1,0 +1,67 @@
+<h1><span class="chap">第 9 章</span>発展 ― ここから先へ</h1>
+
+<p class="lead">本プログラムは「動く最小構成」です。流体 CG の研究と実務は、ここで扱った各段階をそれぞれ大きく発展させてきました。本章では、次に学ぶべき手法を、本プログラムのどこを置き換えれば試せるかという観点で紹介します。</p>
+
+<h2>9.1 シミュレーションの発展</h2>
+
+<h3>非圧縮性を厳密に扱う: PCISPH / IISPH / DFSPH</h3>
+<p>WCSPH は「圧縮したら押し返す」方式なので、音速を高くしないと数 % の密度変動が残り、時間刻みも音速で制限されます。PCISPH (2009)、IISPH (2013)、DFSPH (2015) は、密度が基準値になるように圧力を <strong>反復的に解く</strong> ことで、密度変動を 0.1 % 以下に抑えつつ時間刻みを数倍〜10 倍に伸ばします。本プログラムでは <code>CS_Density</code> と <code>CS_Force</code> の間に「圧力を予測して修正する」ループが入り、<code>SOUND_SPEED</code> は不要になります。計算は 1 ステップあたり重くなりますが、ステップ数が減るので総合的には速くなることが多い手法です。</p>
+
+<h3>位置ベース流体 (PBF)</h3>
+<p>速度ではなく <strong>位置の拘束</strong> として密度を扱い、拘束を満たすよう粒子を直接動かす手法です (Macklin &amp; Müller, 2013)。大きな時間刻みでも決して発散しない頑健さから、ゲームエンジンの流体 (NVIDIA FleX など) で広く使われています。SPH の一種と見ることもできますが、「力を積分する」という本プログラムの骨格とは考え方が異なります。</p>
+
+<h3>表面張力と凝集</h3>
+<p>本プログラムには <code>COHESION_KAPPA</code> という係数が用意されており、Becker &amp; Teschner (2007) の簡易的な凝集力 \(-\kappa \sum_j (\mathbf x_i - \mathbf x_j) W\) を有効にできます。より物理的な表面張力は Akinci ら (2013) の手法が標準で、粒子の法線を推定して曲率に応じた力を加えます。小さな水滴が丸くなる、細い流れが千切れてしずくになる、といった現象に効きます。</p>
+
+<h3>境界粒子</h3>
+<p>本プログラムの壁は「平面の解析的な補正 + クランプ」ですが、任意形状の障害物 (動画の水槽の縁、あるいはコップやキャラクター) を扱うには、障害物の表面に粒子を並べて流体粒子と同じ枠組みで相互作用させる <strong>境界粒子法</strong> (Akinci ら, 2012) が必要です。<code>BoundaryDensity</code> を境界粒子からの寄与に置き換えます。</p>
+
+<h3>泡・スプレー・飛沫の二次粒子</h3>
+<p>動画に見える白い泡は、空気の巻き込みです。Ihmsen ら (2012) は、流体粒子の「捕捉された空気の量」を速度差と曲率から推定し、そこから軽い <strong>二次粒子</strong> (泡、スプレー、しぶき) を生成して別途描く手法を提案しました。見た目への効果は絶大で、水面が白く泡立つ表現に不可欠です。</p>
+
+<h3>FLIP / APIC ― 格子と粒子のハイブリッド</h3>
+<p>元動画のような映像制作では、圧力を格子で解き、粒子で移流する FLIP 法 (Zhu &amp; Bridson, 2005) や、その改良である APIC が主流です。非圧縮性が厳密で細いシートが保たれる一方、格子解像度で細部が決まります。本プログラムの粒子データ構造はそのまま使え、圧力の計算が「格子上のポアソン方程式を解く」処理に変わります。</p>
+
+<h2>9.2 表面抽出の発展</h2>
+
+<h3>異方性カーネル</h3>
+<p>本プログラムのスカラー場は粒子ごとに球状のふくらみを足すため、薄いシートが「粒々」に見えます。Yu &amp; Turk (2013) は、近傍粒子の分布の主成分分析から楕円体のカーネルを作り、シート状の部分では平たく、孤立した部分では丸くふくらませることで、格段に滑らかな表面を得ました。<code>CS_Field</code> の前に「各粒子の共分散行列を計算する」パスを追加します。</p>
+
+<h3>スクリーンスペース流体レンダリング</h3>
+<p>メッシュを作らず、粒子を球としてスクリーン空間に深度で描き、深度画像を平滑化して法線を求め、厚みも粒子の描画で積算する手法です (van der Laan ら, 2009)。3 次元格子を持たないので、格子解像度の制約と 340 万点のスカラー場計算から解放されます。カメラから見える面しか得られないため影やレイトレーシングとは相性が悪いものの、ゲームでは広く使われています。</p>
+
+<h3>Dual Contouring と適応格子</h3>
+<p>マーチングキューブ法は格子間隔より細い特徴を表現できません。Dual Contouring は法線の情報を使って鋭いエッジを再現し、八分木による適応格子は表面付近だけ細かくします。本プログラムは表面付近以外のセルも全て評価しているので、表面のあるセルだけを列挙する 2 段階の処理にすれば、格子点の計算を 1/10 以下に減らせます。</p>
+
+<h2>9.3 レンダリングの発展</h2>
+
+<h3>レイトレーシングによる屈折</h3>
+<p>スクリーン空間の屈折は「背景を法線でずらす」だけの近似です。DirectX 12 の DXR やコンピュートシェーダーによる自前のレイマーチングを使えば、視線を水面で屈折させて水中を進め、裏面で再び屈折させて背景に到達させる本物の屈折が計算できます。元動画の水塊が「ガラスの箱」に見えるのはこの効果です。</p>
+
+<h3>コースティクス</h3>
+<p>水面で屈折した光が床に集まって作る揺らめく模様です。光源からのフォトンを追跡する方法と、水面の法線から床への光の集中を近似する方法があります。プールの底の模様を再現したいなら必須です。</p>
+
+<h3>環境マップと画像ベース照明</h3>
+<p><code>EnvColor</code> は方向から色を返す手書きの関数でした。これを実写のパノラマ画像 (HDRI) に置き換えると、反射に実世界の風景が映り込み、質感が一気に上がります。キューブマップテクスチャを 1 枚読み込み、<code>texCUBE</code> でサンプリングするだけです。</p>
+
+<h2>9.4 性能の発展</h2>
+<ul>
+  <li><strong>スカラー場の疎な評価</strong>: 粒子から半径 R 以内の格子点だけを更新する「散布 (scatter)」方式にすると、空のセルを評価しなくて済みます。アトミック加算が必要になります。</li>
+  <li><strong>Z オーダーによるセル番号</strong>: セル番号を空間充填曲線 (Morton 順) にすると、隣接セルがメモリ上でも近くなりキャッシュ効率が上がります。</li>
+  <li><strong>非同期コンピュート</strong>: DirectX 12 ではコンピュート (SPH) とグラフィックス (描画) を別キューで並行実行でき、GPU の稼働率を上げられます。</li>
+  <li><strong>半精度</strong>: 位置以外 (速度、密度) を 16 ビット浮動小数点にするとメモリ帯域が半減します。</li>
+</ul>
+
+<h2>9.5 参考文献</h2>
+<ol class="small">
+  <li>M. Müller, D. Charypar, M. Gross, "Particle-Based Fluid Simulation for Interactive Applications," SCA 2003. ― CG における SPH の出発点。本プログラムのカーネルはこの論文のもの。</li>
+  <li>J. J. Monaghan, "Smoothed Particle Hydrodynamics," Annual Review of Astronomy and Astrophysics, 1992. ― 人工粘性と XSPH の原典。</li>
+  <li>M. Becker, M. Teschner, "Weakly Compressible SPH for Free Surface Flows," SCA 2007. ― Tait 状態方程式を用いた WCSPH と凝集力。</li>
+  <li>W. E. Lorensen, H. E. Cline, "Marching Cubes: A High Resolution 3D Surface Construction Algorithm," SIGGRAPH 1987.</li>
+  <li>J. Yu, G. Turk, "Reconstructing Surfaces of Particle-Based Fluids Using Anisotropic Kernels," ACM TOG 2013.</li>
+  <li>W. J. van der Laan, S. Green, M. Sainz, "Screen Space Fluid Rendering with Curvature Flow," I3D 2009.</li>
+  <li>M. Ihmsen, N. Akinci, G. Akinci, M. Teschner, "Unified Spray, Foam and Air Bubbles for Particle-Based Fluids," The Visual Computer 2012.</li>
+  <li>M. Macklin, M. Müller, "Position Based Fluids," ACM TOG 2013.</li>
+  <li>J. Bender, D. Koschier, "Divergence-Free Smoothed Particle Hydrodynamics," SCA 2015.</li>
+  <li>D. Koschier, J. Bender, B. Solenthaler, M. Teschner, "Smoothed Particle Hydrodynamics Techniques for the Physics Based Simulation of Fluids and Solids," Eurographics Tutorial 2019. ― SPH の現代的な全体像をまとめた最良の入門。</li>
+</ol>

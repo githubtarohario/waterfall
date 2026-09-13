@@ -20,6 +20,8 @@ build\SPHSplash.exe       # リアルタイム表示 (Space 停止, R リセッ�
 build\SPHSplash.exe --record capture --frames 102   # 動画と同じ 24fps 相当で 4.25 秒分を BMP 連番保存して終了
 build\SPHSplash.exe --spacing 0.010                 # 粒子間隔を細かく (≒15万粒子, 既定 0.014 で ≒5万)
 build\SPHSplash.exe --resttest                      # 水塊を床に静置する安定性テストシーン
+build\SPHSplash.exe --particles --nowater           # 粒子だけを表示 (メッシュ無し)
+python book/build_book.py                          # 解説書 book/CG解説書.{html,pdf} を再生成 (章は book/chapters/, コードは実物から自動抽出)
 ```
 
 - `build.bat` は Visual Studio 18 / 2022 の `vcvars64.bat` を探す。**バッチファイルは ASCII のみ** (cmd.exe が UTF-8 の日本語を解釈できず構文エラーになる)。C++ ソースは UTF-8 で `/utf-8` 付きコンパイル。

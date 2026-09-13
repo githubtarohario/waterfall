@@ -1,0 +1,115 @@
+<h1><span class="chap">第 4 章</span>GPU で SPH を実装する ― 近傍探索とデータの流れ</h1>
+
+<p class="lead">SPH の計算量は「各粒子 × その近傍粒子」で決まります。全粒子同士の距離を調べる素朴な方法は \(O(N^2)\) で、5 万粒子では 25 億回の比較になり話になりません。本章では、空間を格子に区切って近傍候補を絞り込む方法と、それを GPU 上で「ソート」として実現する方法、そしてデータをどのバッファに置いて各シェーダーに渡すかという設計を説明します。</p>
+
+<h2>4.1 一様格子による近傍探索</h2>
+<p>カーネルは距離 \(h\) より遠い粒子の影響を 0 にします。そこで空間を一辺 \(h\) の立方体セルに区切ると、ある粒子の近傍粒子は <strong>自分のセルとその隣接セル (3×3×3 = 27 個) の中にしかいない</strong> ことが保証されます。</p>
+
+<figure class="diagram"><img src="figures/grid_neighbors.svg" alt="一様格子"><figcaption>図: 一様格子による近傍候補の絞り込み (2 次元で図示)。</figcaption></figure>
+
+<p>問題は「あるセルに含まれる粒子をどう列挙するか」です。CPU ならセルごとにリストを持てばよいのですが、GPU ではリストのような可変長構造は扱いにくく、代わりに <strong>粒子をセル番号でソートし、セルごとの先頭位置を配列で持つ</strong> という方法をとります。ソート後は、セル \(c\) の粒子が配列の <code>cellStart[c]</code> から <code>cellStart[c+1]</code> の手前まで連続して並ぶので、この範囲をループするだけで済みます。</p>
+
+<h2>4.2 カウンティングソートを GPU で行う</h2>
+<p>セル番号は 0 から (セル数 − 1) までの整数で、粒子数よりずっと小さい範囲に収まります。このような整数キーのソートには <span class="keyterm">カウンティングソート</span> が最適で、比較を一切せず 3 つの単純なパスで完了します。</p>
+
+<figure class="diagram"><img src="figures/counting_sort.svg" alt="カウンティングソート"><figcaption>図: 8 粒子・4 セルの例。カウント → 累積和 → 並べ替え。</figcaption></figure>
+
+<ol>
+  <li><strong>カウント</strong> (<code>CS_Count</code>): 各粒子が自分のセルのカウンタをアトミックに +1 する。このとき返る「加算前の値」を、セル内での順序番号 <code>cellOffset</code> として保存する。</li>
+  <li><strong>累積和</strong> (<code>CS_Scan</code>): カウンタ配列の排他的累積和をとると、各セルの先頭位置 <code>cellStart</code> になる。</li>
+  <li><strong>並べ替え</strong> (<code>CS_Reorder</code>): 各粒子を <code>cellStart[cell] + cellOffset</code> の位置にコピーする。</li>
+</ol>
+
+<h3>並列累積和 (スキャン)</h3>
+<p>累積和は本質的に逐次処理に見えますが、GPU では <span class="keyterm">Hillis–Steele のスキャン</span> というアルゴリズムで \(\log_2 n\) 段の並列処理にできます。各段でスレッド \(i\) は「\(2^k\) 個前の値」を自分に足します。段を重ねるごとに、各要素は自分より前の要素を 1, 2, 4, 8, … 個ずつ取り込み、10 段で 1024 要素の累積和が完成します。</p>
+<p>セル数は数十万 (既定設定で 169,128) あるので、1 グループ 1024 スレッドで 1024 要素ずつ順に処理し、チャンクの合計を <code>sCarry</code> に持ち越します。単一グループで逐次処理するため理論上は最速ではありませんが、SPH 本体の計算量に比べれば無視できる時間で済み、複数グループ間の同期という厄介な問題を避けられます。</p>
+
+{{fn:shaders/sph.hlsl:CS_Scan}}
+
+<div class="warn"><code>GroupMemoryBarrierWithGroupSync()</code> の位置に注意してください。Hillis–Steele では「読み出し」と「書き込み」の間にバリアが必要です。読み出した値を一時変数 <code>t</code> に退避してからバリア、その後に加算、さらにバリア ― これを省くと、隣のスレッドが更新済みの値を読んでしまい結果が壊れます。バリアはグループ内の全スレッドが同じ回数だけ通過しなければならないので、<code>if</code> の中に置いてはいけません。</div>
+
+<h3>並べ替え</h3>
+{{fn:shaders/sph.hlsl:CS_Reorder}}
+
+<p>並べ替えは位置と速度を <strong>別のバッファにコピー</strong> します (インプレースでは他のスレッドが読む前に上書きしてしまう)。そのため位置と速度のバッファは 2 組用意し、毎回入れ替えて使います。これが次節の「ピンポンバッファ」です。</p>
+
+<h2>4.3 バッファの設計とピンポン</h2>
+<p><code>SPHSimulator</code> が GPU 上に持つバッファをまとめます。</p>
+<table>
+  <tr><th>バッファ</th><th>型 × 要素数</th><th>内容</th></tr>
+  <tr><td><code>m_pos[2]</code>, <code>m_vel[2]</code></td><td>float4 × N (2 組)</td><td>位置・速度。<code>m_cur</code> が現在有効な側を指す</td></tr>
+  <tr><td><code>m_xsph</code></td><td>float4 × N</td><td>XSPH 速度補正</td></tr>
+  <tr><td><code>m_accel</code></td><td>float4 × N</td><td>加速度</td></tr>
+  <tr><td><code>m_densPres</code></td><td>float2 × N</td><td>密度と圧力</td></tr>
+  <tr><td><code>m_cellIndex</code>, <code>m_cellOffset</code></td><td>uint × N</td><td>粒子の所属セル、セル内順序</td></tr>
+  <tr><td><code>m_cellCount</code></td><td>uint × セル数</td><td>セル内粒子数</td></tr>
+  <tr><td><code>m_cellStart</code></td><td>uint × (セル数 + 1)</td><td>セル先頭位置。末尾要素は総粒子数</td></tr>
+</table>
+<p>位置を <code>float3</code> ではなく <code>float4</code> にしているのは、構造化バッファの要素を 16 バイト境界に揃えると GPU のメモリアクセスが効率的になるためです (w 成分は未使用)。</p>
+
+<p>1 サブステップの中でバッファがどう流れるかを図にします。「cur」が現在側、「alt」がもう一方です。</p>
+<div class="mermaid-wrap"><pre class="mermaid">
+flowchart TB
+    subgraph 格子構築
+        A["CS_ClearCells<br/>cellCount ← 0"] --> B["CS_Count<br/>pos[cur] → cellCount, cellIndex, cellOffset"]
+        B --> C["CS_Scan<br/>cellCount → cellStart"]
+        C --> D["CS_Reorder<br/>pos/vel[cur] → pos/vel[alt]<br/>(cur と alt を入れ替え)"]
+    end
+    D --> E["CS_Density<br/>pos[cur], cellStart → densPres"]
+    E --> F["CS_Force<br/>pos/vel[cur], densPres → accel, xsph"]
+    F --> G["CS_Integrate<br/>pos/vel[cur], accel, xsph → pos/vel[alt]<br/>(cur と alt を入れ替え)"]
+</pre></div>
+
+<p>入れ替えは 1 サブステップに 2 回 (並べ替え後と積分後) 起きます。C++ 側では <code>m_cur = 1 - m_cur</code> と書くだけです。</p>
+
+{{fn:src/SPHSimulator.cpp:SPHSimulator::Step}}
+
+<div class="tip"><code>CS_Force</code> の出力スロット <code>u5</code> は、シェーダー上は <code>gVelOut</code> という名前ですが、C++ 側では <code>m_xsph</code> を束縛しています。レジスタ番号は単なる「スロット」で、そこに何を挿すかは C++ が決める ― この関係を理解しておくと、DirectX 11 で UAV が 8 個までという制限の中でスロットを使い回せます。</div>
+
+<h2>4.4 近傍ループの書き方</h2>
+<p>密度と力のシェーダーは同じ形の 3 重ループを持ちます。</p>
+<pre><code class="language-cpp">int3 c = CellCoord(pi);                       // 自分のセル
+for (int dz = -1; dz &lt;= 1; ++dz)
+for (int dy = -1; dy &lt;= 1; ++dy)
+for (int dx = -1; dx &lt;= 1; ++dx)
+{
+    int3 nc = c + int3(dx, dy, dz);
+    if (!CellValid(nc)) continue;             // 領域の端では隣接セルが無い
+    uint cell = CellId(nc);
+    uint s = gCellStart[cell], e = gCellStart[cell + 1];
+    for (uint j = s; j &lt; e; ++j)              // このセルの粒子を連続して走査
+    {
+        float3 r = pi - gPosIn[j].xyz;
+        float r2 = dot(r, r);
+        if (r2 &lt; h2) { ... }                  // 実際に h 以内かは距離で判定
+    }
+}</code></pre>
+<p>格子はあくまで「候補の絞り込み」であって、27 セルの中には \(h\) より遠い粒子も含まれます (体積比で言えば球は立方体 27 個の約 15 % なので、候補の大半は距離判定で落ちます)。それでも \(N^2\) に比べれば圧倒的に少なく、粒子数に比例した計算量になります。</p>
+
+<p>セル座標の計算は共通ヘッダにあります。領域外の位置は端のセルにクランプするので、粒子がどこにいても必ずどこかのセルに属します。</p>
+
+{{range:shaders/sph_common.hlsli|// 位置 → 格子座標 (領域外は端のセルへクランプ)|return all(c >= 0) && all(c < int3(gridDim));}}
+
+<h2>4.5 なぜメッシュ生成の前にもう一度ソートするのか</h2>
+<p>第 1 章のメインループで、<code>StepFrame()</code> の直後に <code>SortParticles()</code> を呼んでいました。サブステップの最後は積分 (<code>CS_Integrate</code>) なので、そこで粒子が動いた後、格子 (<code>cellStart</code>) は <strong>積分前の位置</strong> に基づいたままです。次のサブステップの先頭で作り直されるので SPH 自身には問題ありませんが、マーチングキューブ法は同じ格子を使って粒子を探すため (第 5 章)、位置と格子がずれていると粒子を見落とし、表面に穴が開きます。そこで描画の前に格子だけを再構築します。コストは 1 サブステップの半分程度です。</p>
+
+<h2>4.6 初期化と粒子の生成</h2>
+<p><code>Initialize</code> は粒子間隔からすべての導出量を計算し、水塊を格子状の粒子で埋め、GPU リソースを生成します。</p>
+
+{{fn:src/SPHSimulator.cpp:SPHSimulator::BuildInitialParticles}}
+
+<p>2 % の乱れ (jitter) を加えているのは、完全に対称な格子だと数値誤差も完全に対称になり、崩れ始めるまで不自然に長く「固まった」ままになるからです。乱れはごく小さいので初期密度への影響は無視できます。</p>
+
+<h2>4.7 性能の目安</h2>
+<table>
+  <tr><th>粒子間隔</th><th>粒子数 (2 ブロック)</th><th>サブステップ / フレーム</th><th>1 フレームの計算時間 (RTX 3060)</th></tr>
+  <tr><td class="num">0.014 m</td><td class="num">52,446</td><td class="num">45</td><td class="num">約 33 ms</td></tr>
+  <tr><td class="num">0.010 m</td><td class="num">154,200</td><td class="num">63</td><td class="num">約 115 ms</td></tr>
+</table>
+<p>粒子数が 3 倍になると、サブステップ数も 1.4 倍になる (h が縮んで CFL の上限が下がる) ため、計算時間は約 4 倍になります。粒子間隔を半分にすると粒子数 8 倍 × サブステップ 2 倍 = 16 倍 ― 解像度を上げるコストは急激です。時間を含めた計算量は \(O(1/d^4)\) だと覚えておくと見積もりに便利です。</p>
+
+<h2>実験してみよう</h2>
+<ul>
+  <li><code>SortParticles()</code> の呼び出しをメインループから消して、水面に何が起きるか観察してください (穴やちらつきが出ます)。</li>
+  <li>タイトルバーの <code>ms/frame</code> を見ながら、<code>--spacing</code> を 0.020, 0.014, 0.010 と変えて、上の表の \(O(1/d^4)\) を確かめてください。</li>
+</ul>
